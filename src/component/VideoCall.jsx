@@ -173,6 +173,7 @@
 //             setCallStatus('calling');
 //             setError(null);
             
+
 //             // Demander l'accès à la caméra/micro
 //             const stream = await navigator.mediaDevices.getUserMedia({ 
 //                 video: true, 
@@ -574,6 +575,13 @@ const VideoCall = ({ currentUser, selectedUser, onClose }) => {
             console.log('🎥 Starting call to:', selectedUser?._id);
             setCallStatus('calling');
             setError(null);
+            console.log('📡 Emitting call_user with data:', {
+    fromUserId: currentUser._id,
+    toUserId: selectedUser._id,
+    callerInfo: {
+        name: `${currentUser.firstName} ${currentUser.lastName}`
+    }
+});
             
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 video: true, 

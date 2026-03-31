@@ -10,31 +10,35 @@ class SocketService {
         this.listeners = new Map();
     }
 
-    initialize(userId) {
-        if (this.socket && this.userId === userId) {
-            return this.socket;
-        }
-
-        if (this.socket) {
-            this.disconnect();
-        }
-
-        this.userId = userId;
-        this.socket = io(SOCKET_URL, {
-            transports: ['websocket', 'polling']
-        });
-
-        this.socket.on('connect', () => {
-            console.log('✅ Global socket connected:', this.socket.id);
-            this.socket.emit('register', userId);
-        });
-
-        this.socket.on('connect_error', (error) => {
-            console.error('❌ Socket connection error:', error);
-        });
-
+   initialize(userId) {
+    if (this.socket && this.userId === userId) {
         return this.socket;
     }
+
+    if (this.socket) {
+        this.disconnect();
+    }
+
+    this.userId = userId;
+    this.socket = io(SOCKET_URL, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
+    });
+
+    this.socket.on('connect', () => {
+        console.log('✅ Global socket connected:', this.socket.id);
+        // IMPORTANT: Envoyer l'enregistrement après la connexion
+        this.socket.emit('register', userId);
+    });
+
+    this.socket.on('connect_error', (error) => {
+        console.error('❌ Socket connection error:', error);
+    });
+
+    return this.socket;
+}
 
     getSocket() {
         return this.socket;
