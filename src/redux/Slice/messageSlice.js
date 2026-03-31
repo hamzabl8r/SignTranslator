@@ -1,62 +1,30 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 import io from 'socket.io-client';
+import socketService from '../../services/socketService';
 
 const API_URL = "https://backpfe-production.up.railway.app/api/messages";
-const SOCKET_URL = "https://backpfe-production.up.railway.app";
 
-// Créer une connexion socket
-// Dans messageSlice.js, assure-toi que initializeSocket est correct
-let socket = null;
-
+// Initialiser le socket (utilise le service centralisé)
 export const initializeSocket = (userId) => {
-    if (!socket && userId) {
-        console.log('🔌 Initializing socket for user:', userId);
-        socket = io(SOCKET_URL, {
-            transports: ['websocket', 'polling']
-        });
-        
-        socket.on('connect', () => {
-            console.log('✅ Socket connected:', socket.id);
-            socket.emit('register', userId);
-        });
-        
-        socket.on('registered', (data) => {
-            console.log('✅ User registered on server:', data);
-        });
-        
-        socket.on('connect_error', (error) => {
-            console.error('❌ Socket connection error:', error);
-        });
-        
-        socket.on('disconnect', () => {
-            console.log('❌ Socket disconnected');
-        });
-        
-        return socket;
+    if (userId) {
+        return socketService.initialize(userId);
     }
-    return socket;
+    return socketService.getSocket();
 };
 
 export const disconnectSocket = () => {
-    if (socket) {
-        socket.disconnect();
-        socket = null;
-    }
+    socketService.disconnect();
 };
 
 // Envoyer un message via Socket.IO
 export const sendMessageSocket = ({ senderId, receiverId, text }) => {
-    if (socket) {
-        socket.emit('send_message', { senderId, receiverId, text });
-    }
+    socketService.emit('send_message', { senderId, receiverId, text });
 };
 
 // Marquer comme lu via Socket.IO
 export const markReadSocket = ({ conversationId, userId }) => {
-    if (socket) {
-        socket.emit('mark_read', { conversationId, userId });
-    }
+    socketService.emit('mark_read', { conversationId, userId });
 };
 
 // Récupérer les utilisateurs

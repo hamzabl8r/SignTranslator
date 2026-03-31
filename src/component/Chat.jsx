@@ -16,6 +16,8 @@ import {
 import toast from 'react-hot-toast';
 import VideoCall from './VideoCall';
 import './Styles/Chat.css';
+import socketService from '../services/socketService';
+
 
 const Chat = () => {
     const [messageText, setMessageText] = useState('');
@@ -32,49 +34,45 @@ const Chat = () => {
 
     // Initialiser Socket.IO
     // Chat.jsx - Ajoute ceci dans le useEffect principal
+// Dans le useEffect principal :
 useEffect(() => {
     if (currentUser?._id) {
         console.log('🔌 Initializing socket for chat...');
         const socket = initializeSocket(currentUser._id);
         socketRef.current = socket;
         
-        if (socket) {
-            // Écouter la confirmation d'enregistrement
-            socket.on('registered', (data) => {
-                console.log('✅ Socket registered:', data);
-            });
-            
-            // Écouter les messages (déjà existant)
-            socket.on('new_message', (message) => {
-                console.log('New message received:', message);
-                dispatch(addMessage(message));
-                dispatch(getConversations());
-                toast.success(`New message from ${message.sender.firstName}`);
-            });
-            
-            socket.on('message_sent', (message) => {
-                console.log('Message sent:', message);
-                dispatch(addMessage(message));
-            });
-            
-            socket.on('messages_read', (data) => {
-                console.log('Messages read:', data);
-                if (selectedUser?._id === data.userId) {
-                    dispatch(markMessageRead({ conversationId: data.conversationId }));
-                }
-            });
-        }
+        // Utiliser socketService pour les écouteurs
+        socketService.on('registered', (data) => {
+            console.log('✅ Socket registered:', data);
+        });
+        
+        socketService.on('new_message', (message) => {
+            console.log('New message received:', message);
+            dispatch(addMessage(message));
+            dispatch(getConversations());
+            toast.success(`New message from ${message.sender.firstName}`);
+        });
+        
+        socketService.on('message_sent', (message) => {
+            console.log('Message sent:', message);
+            dispatch(addMessage(message));
+        });
+        
+        socketService.on('messages_read', (data) => {
+            console.log('Messages read:', data);
+            if (selectedUser?._id === data.userId) {
+                dispatch(markMessageRead({ conversationId: data.conversationId }));
+            }
+        });
         
         return () => {
-            if (socket) {
-                socket.off('registered');
-                socket.off('new_message');
-                socket.off('message_sent');
-                socket.off('messages_read');
-            }
+            socketService.off('registered');
+            socketService.off('new_message');
+            socketService.off('message_sent');
+            socketService.off('messages_read');
         };
     }
-}, [currentUser]);
+}, [currentUser, dispatch, selectedUser]);
 
     // Charger les conversations et utilisateurs
     useEffect(() => {
