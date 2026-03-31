@@ -1,0 +1,27 @@
+.home{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    margin-top: 30px;
+}
+.home h1 {
+    font-size: 3rem;
+    margin-bottom: 20px;
+}
+.home p {
+    font-size: 1.5rem;
+    color: var(--text-dim);
+}
+.home .get-started-btn {
+    margin-top: 30px;
+    padding: 15px 30px;
+    font-size: 1.2rem;
+    color: var(--text-main);
+    background-color: var(--primary-green);
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
