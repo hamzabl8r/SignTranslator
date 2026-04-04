@@ -6,12 +6,9 @@ import { store } from './redux/store';
 import './index.css';
 import App from './App';
 
-// Polyfills pour simple-peer
+// Polyfill pour process
 import process from 'process';
-import { Buffer } from 'buffer';
-
 window.process = process;
-window.Buffer = Buffer;
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

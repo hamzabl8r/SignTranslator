@@ -1,18 +1,19 @@
 const webpack = require('webpack');
 
 module.exports = function override(config) {
+    // Désactiver complètement les fallbacks
     config.resolve.fallback = {
-        stream: require.resolve("stream-browserify"),
-        process: require.resolve("process/browser"),
-        buffer: require.resolve("buffer/"),
-        util: require.resolve("util/"),
-        assert: require.resolve("assert/")
+        stream: false,
+        buffer: false,
+        util: false,
+        assert: false,
+        process: false
     };
     
+    // Ajouter le plugin ProvidePlugin correctement
     config.plugins.push(
         new webpack.ProvidePlugin({
-            process: 'process/browser',
-            Buffer: ['buffer', 'Buffer']
+            process: 'process'
         })
     );
     
