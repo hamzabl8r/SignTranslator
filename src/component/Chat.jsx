@@ -15,9 +15,8 @@ import {
 } from '../redux/Slice/messageSlice';
 import toast from 'react-hot-toast';
 import VideoCall from './VideoCall';
-import './Styles/Chat.css';
 import socketService from '../services/socketService';
-
+import './Styles/Chat.css';
 
 const Chat = () => {
     const [messageText, setMessageText] = useState('');
@@ -33,46 +32,47 @@ const Chat = () => {
     const socketRef = useRef(null);
 
     // Initialiser Socket.IO
-    // Chat.jsx - Ajoute ceci dans le useEffect principal
-// Dans le useEffect principal :
-useEffect(() => {
-    if (currentUser?._id) {
-        console.log('🔌 Initializing socket for chat...');
-        const socket = initializeSocket(currentUser._id);
-        socketRef.current = socket;
-        
-        // Utiliser socketService pour les écouteurs
-        socketService.on('registered', (data) => {
-            console.log('✅ Socket registered:', data);
-        });
-        
-        socketService.on('new_message', (message) => {
-            console.log('New message received:', message);
-            dispatch(addMessage(message));
-            dispatch(getConversations());
-            toast.success(`New message from ${message.sender.firstName}`);
-        });
-        
-        socketService.on('message_sent', (message) => {
-            console.log('Message sent:', message);
-            dispatch(addMessage(message));
-        });
-        
-        socketService.on('messages_read', (data) => {
-            console.log('Messages read:', data);
-            if (selectedUser?._id === data.userId) {
-                dispatch(markMessageRead({ conversationId: data.conversationId }));
+    useEffect(() => {
+        if (currentUser?._id) {
+            console.log('🔌 Initializing socket for chat...');
+            const socket = initializeSocket(currentUser._id);
+            socketRef.current = socket;
+            
+            if (socket) {
+                // Écouter la confirmation d'enregistrement
+                socketService.on('registered', (data) => {
+                    console.log('✅ Socket registered:', data);
+                });
+                
+                // Écouter les messages
+                socketService.on('new_message', (message) => {
+                    console.log('New message received:', message);
+                    dispatch(addMessage(message));
+                    dispatch(getConversations());
+                    toast.success(`New message from ${message.sender?.firstName || 'Unknown'}`);
+                });
+                
+                socketService.on('message_sent', (message) => {
+                    console.log('Message sent:', message);
+                    dispatch(addMessage(message));
+                });
+                
+                socketService.on('messages_read', (data) => {
+                    console.log('Messages read:', data);
+                    if (selectedUser?._id === data.userId) {
+                        dispatch(markMessageRead({ conversationId: data.conversationId }));
+                    }
+                });
             }
-        });
-        
-        return () => {
-            socketService.off('registered');
-            socketService.off('new_message');
-            socketService.off('message_sent');
-            socketService.off('messages_read');
-        };
-    }
-}, [currentUser, dispatch, selectedUser]);
+            
+            return () => {
+                socketService.off('registered');
+                socketService.off('new_message');
+                socketService.off('message_sent');
+                socketService.off('messages_read');
+            };
+        }
+    }, [currentUser, dispatch, selectedUser]);
 
     // Charger les conversations et utilisateurs
     useEffect(() => {
@@ -91,8 +91,7 @@ useEffect(() => {
             if (existingConv) {
                 dispatch(setCurrentConversation(existingConv));
                 dispatch(getMessages(existingConv._id));
-                // Marquer comme lu via Socket.IO
-                if (socketRef.current) {
+                if (socketService.isConnected()) {
                     markReadSocket({ 
                         conversationId: existingConv._id, 
                         userId: currentUser?._id 
@@ -104,7 +103,7 @@ useEffect(() => {
         }
     }, [selectedUser, conversations, dispatch, currentUser]);
 
-    // Scroll automatique vers le bas quand nouveaux messages
+    // Scroll automatique
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
@@ -113,7 +112,6 @@ useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-    // Envoyer un message
     const handleSendMessage = (e) => {
         e.preventDefault();
         if (!messageText.trim()) {
@@ -125,7 +123,6 @@ useEffect(() => {
             return;
         }
 
-        // Envoyer via Socket.IO
         sendMessageSocket({
             senderId: currentUser._id,
             receiverId: selectedUser._id,
@@ -160,7 +157,6 @@ useEffect(() => {
     return (
         <>
             <div className="chat-container">
-                {/* Sidebar - Conversations */}
                 <div className="chat-sidebar">
                     <div className="sidebar-header">
                         <h3>Messages</h3>
@@ -172,21 +168,20 @@ useEffect(() => {
                         </button>
                     </div>
 
-                    {/* User List for new chat */}
                     {showUserList && (
                         <div className="user-list">
                             <h4>Select a user to chat with</h4>
                             {users && users.length > 0 ? (
-                                users.map(user => (
+                                users.filter(u => u._id !== currentUser._id).map(user => (
                                     <div 
                                         key={user._id}
                                         className="user-item"
                                         onClick={() => handleUserSelect(user)}
                                     >
                                         <img 
-                                            src={user.profilePic ? `https://backpfe-production.up.railway.app${user.profilePic}` : "https://via.placeholder.com/40"}
+                                            src={user.profilePic ? `https://backpfe-production.up.railway.app${user.profilePic}` : "/default-avatar.png"}
                                             alt={user.firstName}
-                                            onError={(e) => { e.target.src = "https://via.placeholder.com/40"; }}
+                                            onError={(e) => { e.target.src = "/default-avatar.png"; }}
                                         />
                                         <div className="user-info">
                                             <span className="user-name">{user.firstName} {user.lastName}</span>
@@ -197,13 +192,11 @@ useEffect(() => {
                             ) : (
                                 <div className="no-users">
                                     <p>No other users found.</p>
-                                    <p>Create another account to start chatting!</p>
                                 </div>
                             )}
                         </div>
                     )}
 
-                    {/* Conversations List */}
                     <div className="conversations-list">
                         <h4>Recent Chats</h4>
                         {conversations && conversations.length > 0 ? (
@@ -214,9 +207,9 @@ useEffect(() => {
                                     onClick={() => handleUserSelect(conv.participant)}
                                 >
                                     <img 
-                                        src={conv.participant?.profilePic ? `https://backpfe-production.up.railway.app${conv.participant.profilePic}` : "https://via.placeholder.com/50"}
+                                        src={conv.participant?.profilePic ? `https://backpfe-production.up.railway.app${conv.participant.profilePic}` : "/default-avatar.png"}
                                         alt={conv.participant?.firstName}
-                                        onError={(e) => { e.target.src = "https://via.placeholder.com/50"; }}
+                                        onError={(e) => { e.target.src = "/default-avatar.png"; }}
                                     />
                                     <div className="conversation-info">
                                         <div className="conversation-name">
@@ -243,16 +236,14 @@ useEffect(() => {
                     </div>
                 </div>
 
-                {/* Chat Area */}
                 <div className="chat-area">
                     {selectedUser ? (
                         <>
-                            {/* Chat Header */}
                             <div className="chat-header">
                                 <img 
-                                    src={selectedUser.profilePic ? `https://backpfe-production.up.railway.app${selectedUser.profilePic}` : "https://via.placeholder.com/50"}
+                                    src={selectedUser.profilePic ? `https://backpfe-production.up.railway.app${selectedUser.profilePic}` : "/default-avatar.png"}
                                     alt={selectedUser.firstName}
-                                    onError={(e) => { e.target.src = "https://via.placeholder.com/50"; }}
+                                    onError={(e) => { e.target.src = "/default-avatar.png"; }}
                                 />
                                 <div className="chat-header-info">
                                     <h3>{selectedUser.firstName} {selectedUser.lastName}</h3>
@@ -267,7 +258,6 @@ useEffect(() => {
                                 </button>
                             </div>
 
-                            {/* Messages */}
                             <div className="messages-container">
                                 {messages && messages.length === 0 ? (
                                     <div className="no-messages">
@@ -281,10 +271,10 @@ useEffect(() => {
                                         >
                                             {msg.sender?._id !== currentUser?._id && (
                                                 <img 
-                                                    src={msg.sender?.profilePic ? `https://backpfe-production.up.railway.app${msg.sender.profilePic}` : "https://via.placeholder.com/35"}
+                                                    src={msg.sender?.profilePic ? `https://backpfe-production.up.railway.app${msg.sender.profilePic}` : "/default-avatar.png"}
                                                     alt={msg.sender?.firstName}
                                                     className="message-avatar"
-                                                    onError={(e) => { e.target.src = "https://via.placeholder.com/35"; }}
+                                                    onError={(e) => { e.target.src = "/default-avatar.png"; }}
                                                 />
                                             )}
                                             <div className="message-content">
@@ -304,7 +294,6 @@ useEffect(() => {
                                 <div ref={messagesEndRef} />
                             </div>
 
-                            {/* Message Input */}
                             <form className="message-input-form" onSubmit={handleSendMessage}>
                                 <input
                                     type="text"
@@ -330,7 +319,6 @@ useEffect(() => {
                 </div>
             </div>
 
-            {/* Video Call Modal */}
             {showVideoCall && (
                 <VideoCall
                     currentUser={currentUser}

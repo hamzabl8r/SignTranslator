@@ -10,45 +10,51 @@ class SocketService {
         this.listeners = new Map();
     }
 
-   initialize(userId) {
-    if (this.socket && this.userId === userId) {
+    initialize(userId) {
+        if (this.socket && this.userId === userId && this.socket.connected) {
+            console.log('✅ Socket already initialized for user:', userId);
+            return this.socket;
+        }
+
+        if (this.socket) {
+            this.disconnect();
+        }
+
+        this.userId = userId;
+        this.socket = io(SOCKET_URL, {
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000
+        });
+
+        this.socket.on('connect', () => {
+            console.log('✅ Global socket connected:', this.socket.id);
+            this.socket.emit('register', userId);
+        });
+
+        this.socket.on('connect_error', (error) => {
+            console.error('❌ Socket connection error:', error);
+        });
+
+        this.socket.on('disconnect', () => {
+            console.log('❌ Socket disconnected');
+        });
+
         return this.socket;
     }
-
-    if (this.socket) {
-        this.disconnect();
-    }
-
-    this.userId = userId;
-    this.socket = io(SOCKET_URL, {
-        transports: ['websocket', 'polling'],
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
-    });
-
-    this.socket.on('connect', () => {
-        console.log('✅ Global socket connected:', this.socket.id);
-        // IMPORTANT: Envoyer l'enregistrement après la connexion
-        this.socket.emit('register', userId);
-    });
-
-    this.socket.on('connect_error', (error) => {
-        console.error('❌ Socket connection error:', error);
-    });
-
-    return this.socket;
-}
 
     getSocket() {
         return this.socket;
     }
 
-    // Écouter un événement
+    isConnected() {
+        return this.socket && this.socket.connected;
+    }
+
     on(event, callback) {
         if (!this.socket) return;
         
-        // Stocker pour pouvoir supprimer plus tard
         if (!this.listeners.has(event)) {
             this.listeners.set(event, []);
         }
@@ -56,7 +62,6 @@ class SocketService {
         this.socket.on(event, callback);
     }
 
-    // Supprimer un écouteur
     off(event, callback) {
         if (!this.socket) return;
         
@@ -71,10 +76,10 @@ class SocketService {
         }
     }
 
-    // Émettre un événement
     emit(event, data) {
         if (this.socket && this.socket.connected) {
             this.socket.emit(event, data);
+            console.log(`📡 Emitted ${event}:`, data);
         } else {
             console.warn(`Socket not connected, cannot emit ${event}`);
         }
@@ -82,7 +87,6 @@ class SocketService {
 
     disconnect() {
         if (this.socket) {
-            // Supprimer tous les écouteurs
             this.listeners.forEach((callbacks, event) => {
                 callbacks.forEach(cb => {
                     this.socket.off(event, cb);

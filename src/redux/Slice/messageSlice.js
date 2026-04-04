@@ -1,11 +1,11 @@
+// redux/Slice/messageSlice.js
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
-import io from 'socket.io-client';
 import socketService from '../../services/socketService';
 
 const API_URL = "https://backpfe-production.up.railway.app/api/messages";
 
-// Initialiser le socket (utilise le service centralisé)
+// Initialiser le socket
 export const initializeSocket = (userId) => {
     if (userId) {
         return socketService.initialize(userId);
@@ -17,12 +17,10 @@ export const disconnectSocket = () => {
     socketService.disconnect();
 };
 
-// Envoyer un message via Socket.IO
 export const sendMessageSocket = ({ senderId, receiverId, text }) => {
     socketService.emit('send_message', { senderId, receiverId, text });
 };
 
-// Marquer comme lu via Socket.IO
 export const markReadSocket = ({ conversationId, userId }) => {
     socketService.emit('mark_read', { conversationId, userId });
 };

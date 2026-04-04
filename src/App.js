@@ -17,6 +17,12 @@ import ResetPassword from './component/ResetPassword';
 import ProtectedRoute from './component/ProtectedRoute';
 import Chat from './component/Chat';
 
+import process from 'process';
+import { Buffer } from 'buffer';
+
+window.process = process;
+window.Buffer = Buffer;
+
 const App = () => {
   const dispatch = useDispatch();
   const { status, user } = useSelector((state) => state.user);
