@@ -23,6 +23,8 @@ const Chat = () => {
     const [selectedUser, setSelectedUser] = useState(null);
     const [showUserList, setShowUserList] = useState(false);
     const [showVideoCall, setShowVideoCall] = useState(false);
+    // ✅ FIX: Track incoming call at Chat level so VideoCall can be shown automatically
+    const [pendingIncomingCall, setPendingIncomingCall] = useState(null);
     
     const dispatch = useDispatch();
     const { user: currentUser } = useSelector((state) => state.user);
@@ -39,12 +41,10 @@ const Chat = () => {
             socketRef.current = socket;
             
             if (socket) {
-                // Écouter la confirmation d'enregistrement
                 socketService.on('registered', (data) => {
                     console.log('✅ Socket registered:', data);
                 });
                 
-                // Écouter les messages
                 socketService.on('new_message', (message) => {
                     console.log('New message received:', message);
                     dispatch(addMessage(message));
@@ -63,6 +63,42 @@ const Chat = () => {
                         dispatch(markMessageRead({ conversationId: data.conversationId }));
                     }
                 });
+
+                // ✅ FIX: Listen for incoming_call HERE (Chat is always mounted)
+                // This ensures the listener is active even when VideoCall is not open
+                socketService.on('incoming_call', (data) => {
+                    console.log('📞 INCOMING CALL received in Chat.jsx:', data);
+                    
+                    if (data.fromUserId !== currentUser._id) {
+                        // Save the incoming call data and open VideoCall component
+                        setPendingIncomingCall(data);
+                        setShowVideoCall(true);
+
+                        // Show a toast notification as backup
+                        toast(`📞 Incoming call from ${data.callerInfo?.name || 'Someone'}`, {
+                            duration: 10000,
+                            icon: '📞',
+                        });
+
+                        // Request notification permission and show browser notification
+                        if ('Notification' in window) {
+                            if (Notification.permission === 'granted') {
+                                new Notification('📞 Incoming Video Call', {
+                                    body: `${data.callerInfo?.name || 'Someone'} is calling you...`,
+                                    icon: data.callerInfo?.profilePic || '/default-avatar.png',
+                                });
+                            } else if (Notification.permission !== 'denied') {
+                                Notification.requestPermission().then(permission => {
+                                    if (permission === 'granted') {
+                                        new Notification('📞 Incoming Video Call', {
+                                            body: `${data.callerInfo?.name || 'Someone'} is calling you...`,
+                                        });
+                                    }
+                                });
+                            }
+                        }
+                    }
+                });
             }
             
             return () => {
@@ -70,6 +106,7 @@ const Chat = () => {
                 socketService.off('new_message');
                 socketService.off('message_sent');
                 socketService.off('messages_read');
+                socketService.off('incoming_call'); // ✅ Cleanup
             };
         }
     }, [currentUser, dispatch, selectedUser]);
@@ -141,6 +178,12 @@ const Chat = () => {
     const formatTime = (date) => {
         if (!date) return '';
         return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    // ✅ FIX: When VideoCall closes, clear pending call data
+    const handleVideoCallClose = () => {
+        setShowVideoCall(false);
+        setPendingIncomingCall(null);
     };
 
     if (!currentUser) {
@@ -323,7 +366,9 @@ const Chat = () => {
                 <VideoCall
                     currentUser={currentUser}
                     selectedUser={selectedUser}
-                    onClose={() => setShowVideoCall(false)}
+                    // ✅ FIX: Pass the pending incoming call data to VideoCall
+                    initialIncomingCall={pendingIncomingCall}
+                    onClose={handleVideoCallClose}
                 />
             )}
         </>
