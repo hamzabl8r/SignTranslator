@@ -11,34 +11,52 @@ class SocketService {
     }
 
     initialize(userId) {
-        if (this.socket && this.userId === userId && this.socket.connected) {
-            console.log('✅ Socket already initialized for user:', userId);
+        if (!userId) return null;
+
+        const userIdStr = userId.toString();
+
+        // ✅ FIX: If already connected for the same user, reuse existing socket
+        if (this.socket && this.socket.connected && this.userId === userIdStr) {
+            console.log('✅ Socket already initialized and connected for user:', userIdStr);
+            // Re-register just in case server restarted
+            this.socket.emit('register', userIdStr);
             return this.socket;
         }
 
+        // ✅ FIX: If socket exists but for a different user, disconnect first
         if (this.socket) {
+            console.log('♻️ Disconnecting old socket before reinitializing');
             this.disconnect();
         }
 
-        this.userId = userId;
+        this.userId = userIdStr;
         this.socket = io(SOCKET_URL, {
             transports: ['websocket', 'polling'],
             reconnection: true,
-            reconnectionAttempts: 5,
-            reconnectionDelay: 1000
+            reconnectionAttempts: 10,
+            reconnectionDelay: 1000,
+            // ✅ FIX: Force new connection (don't reuse old one)
+            forceNew: true,
         });
 
         this.socket.on('connect', () => {
             console.log('✅ Global socket connected:', this.socket.id);
-            this.socket.emit('register', userId);
+            // ✅ FIX: Always register after (re)connect
+            this.socket.emit('register', userIdStr);
+        });
+
+        // ✅ FIX: Re-register on reconnection too
+        this.socket.on('reconnect', () => {
+            console.log('🔄 Socket reconnected, re-registering user:', userIdStr);
+            this.socket.emit('register', userIdStr);
         });
 
         this.socket.on('connect_error', (error) => {
-            console.error('❌ Socket connection error:', error);
+            console.error('❌ Socket connection error:', error.message);
         });
 
-        this.socket.on('disconnect', () => {
-            console.log('❌ Socket disconnected');
+        this.socket.on('disconnect', (reason) => {
+            console.log('❌ Socket disconnected, reason:', reason);
         });
 
         return this.socket;
@@ -55,10 +73,18 @@ class SocketService {
     on(event, callback) {
         if (!this.socket) return;
         
+        // ✅ FIX: Avoid duplicate listeners for the same event+callback
         if (!this.listeners.has(event)) {
             this.listeners.set(event, []);
         }
-        this.listeners.get(event).push(callback);
+
+        const existing = this.listeners.get(event);
+        if (existing.includes(callback)) {
+            console.warn(`⚠️ Listener for "${event}" already registered, skipping duplicate`);
+            return;
+        }
+
+        existing.push(callback);
         this.socket.on(event, callback);
     }
 
@@ -81,7 +107,7 @@ class SocketService {
             this.socket.emit(event, data);
             console.log(`📡 Emitted ${event}:`, data);
         } else {
-            console.warn(`Socket not connected, cannot emit ${event}`);
+            console.warn(`⚠️ Socket not connected, cannot emit "${event}". Connected: ${this.socket?.connected}, Socket: ${!!this.socket}`);
         }
     }
 
