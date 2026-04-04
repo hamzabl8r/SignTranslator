@@ -45,3 +45,37 @@
   text-align: center;
   transition: background-color 0.2s, transform 0.1s;
 }
+
+/* Responsive for Headers */
+@media (max-width: 770px) {
+    .navbar {
+        height: auto;
+        padding: 10px 0;
+        flex-direction: column;
+    }
+    .logo-Name {
+        width: 100%;
+        justify-content: center;
+    }
+    .logo-Name img {
+        height: 100px;
+    }
+    .nav-Links {
+        width: 100%;
+        padding: 10px 0;
+    }
+}
+
+@media (max-width: 550px) {
+    .nav-Links {
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+    }
+    .nav-Links a {
+        font-size: 16px;
+    }
+    .logout-btn {
+        padding: 8px 18px;
+    }
+}

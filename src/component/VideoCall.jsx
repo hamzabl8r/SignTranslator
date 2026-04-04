@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Peer from 'simple-peer';
 import socketService from '../services/socketService';
+import soundService from '../services/soundService';
 import './Styles/VideoCall.css';
 
 // ✅ FIX: Accept initialIncomingCall prop — passed from Chat.jsx when call arrives
@@ -45,6 +46,8 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
     const endCall = () => {
         if (isEndingRef.current) return;
         
+        soundService.stopRingtone();
+        soundService.playCallEnded(); // 🔚 son fin d'appel
         cleanup();
         
         if (socketService.isConnected() && selectedUser) {
@@ -87,11 +90,15 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                 if (peerRef.current && data.signal) {
                     peerRef.current.signal(data.signal);
                 }
+                soundService.stopRingtone();
+                soundService.playCallConnected(); // 🎵 appel connecté
                 setCallStatusSafe('connected');
             });
             
             socketService.on('call_rejected', (data) => {
                 console.log('❌ CALL REJECTED:', data);
+                soundService.stopRingtone();
+                soundService.playCallRejected(); // ❌ appel rejeté
                 setError('Call was rejected');
                 setTimeout(() => {
                     if (!isEndingRef.current) endCall();
@@ -101,6 +108,8 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
             socketService.on('call_ended', (data) => {
                 console.log('🔚 CALL ENDED:', data);
                 if (!isEndingRef.current) {
+                    soundService.stopRingtone();
+                    soundService.playCallEnded(); // 🔚 appel terminé
                     setError('Call ended');
                     setTimeout(() => {
                         cleanup();
@@ -111,6 +120,8 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
             
             socketService.on('call_error', (data) => {
                 console.error('⚠️ CALL ERROR:', data);
+                soundService.stopRingtone();
+                soundService.playCallRejected();
                 setError(data.error);
                 setTimeout(() => {
                     if (!isEndingRef.current) endCall();
@@ -139,6 +150,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
             console.log('🎥 Starting call to:', selectedUser?._id);
             setCallStatusSafe('calling');
             setError(null);
+            soundService.playDialTone(); // 📞 tonalité d'appel sortant
             
             if (!socketService.isConnected()) {
                 throw new Error('Socket not connected');
@@ -186,6 +198,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                 if (remoteVideoRef.current && !isEndingRef.current) {
                     remoteVideoRef.current.srcObject = remoteStream;
                 }
+                soundService.playCallConnected(); // 🎵 connexion établie
                 setCallStatusSafe('connected');
             });
             
@@ -257,6 +270,8 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                 if (remoteVideoRef.current && !isEndingRef.current) {
                     remoteVideoRef.current.srcObject = remoteStream;
                 }
+                soundService.stopRingtone();
+                soundService.playCallConnected(); // 🎵 appel accepté connecté
                 setCallStatusSafe('connected');
             });
             
@@ -285,6 +300,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
     
     const rejectCall = () => {
         console.log('📞 Rejecting call');
+        soundService.stopRingtone(); // arrêter la sonnerie
         if (incomingCall && !isEndingRef.current) {
             socketService.emit('reject_call', {
                 fromUserId: incomingCall.fromUserId,

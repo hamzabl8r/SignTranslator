@@ -16,6 +16,7 @@ import {
 import toast from 'react-hot-toast';
 import VideoCall from './VideoCall';
 import socketService from '../services/socketService';
+import soundService from '../services/soundService';
 import './Styles/Chat.css';
 
 const Chat = () => {
@@ -49,12 +50,14 @@ const Chat = () => {
                     console.log('New message received:', message);
                     dispatch(addMessage(message));
                     dispatch(getConversations());
+                    soundService.playMessageReceived(); // 🔔 son message reçu
                     toast.success(`New message from ${message.sender?.firstName || 'Unknown'}`);
                 });
                 
                 socketService.on('message_sent', (message) => {
                     console.log('Message sent:', message);
                     dispatch(addMessage(message));
+                    soundService.playMessageSent(); // 📤 son message envoyé
                 });
                 
                 socketService.on('messages_read', (data) => {
@@ -73,6 +76,7 @@ const Chat = () => {
                         // Save the incoming call data and open VideoCall component
                         setPendingIncomingCall(data);
                         setShowVideoCall(true);
+                        soundService.startRingtone(); // 📞 sonnerie appel entrant
 
                         // Show a toast notification as backup
                         toast(`📞 Incoming call from ${data.callerInfo?.name || 'Someone'}`, {
@@ -184,6 +188,7 @@ const Chat = () => {
     const handleVideoCallClose = () => {
         setShowVideoCall(false);
         setPendingIncomingCall(null);
+        soundService.stopRingtone(); // arrêter la sonnerie si on ferme
     };
 
     if (!currentUser) {

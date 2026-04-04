@@ -188,3 +188,24 @@
     font-size: 1.2rem;
   }
 }
+/* Responsive for Translator */
+@media (max-width: 770px) {
+    .header {
+        padding: 10px 15px;
+    }
+    .search-box {
+        flex-direction: column;
+    }
+    .translate-btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 550px) {
+    .box h1 {
+        font-size: 1.2rem;
+    }
+    .user-name {
+        display: none; /* nkhabiw el esm bch nerb7ou blassa */
+    }
+}
