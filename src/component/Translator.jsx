@@ -40,7 +40,6 @@ const Translator = () => {
     navigate('/');
   };
 
-  // Afficher un loader pendant le chargement
   if (status === 'loading') {
     return (
       <div className="loading-container">
@@ -49,14 +48,12 @@ const Translator = () => {
     );
   }
 
-  // Si pas d'utilisateur, ne pas afficher le contenu
   if (!user) {
     return null;
   }
 
   return (
     <div className='translator-container'>
-      {/* Header avec informations utilisateur et logout */}
       <div className="header">
         <div className="user-info">
           <img 
@@ -71,18 +68,15 @@ const Translator = () => {
         </button>
       </div>
 
-      {/* Box 1 - Translator History */}
       <div className="box">
         <h1>Translator History</h1>
         <div className="box1">
-          {/* Ici tu peux ajouter l'historique des traductions */}
           <div className="history-list">
             <p>No translation history yet.</p>
           </div>
         </div>
       </div>
 
-      {/* Box 2 - Search Box */}
       <div className="box">
         <div className="search-box">
           <input 
@@ -94,11 +88,9 @@ const Translator = () => {
         </div>
       </div>
 
-      {/* Box 3 - Translator Dictionary */}
       <div className="box">
         <h1>Translator Dictionary</h1>
         <div className="dictionary-content">
-          {/* Ici tu peux ajouter le dictionnaire */}
           <div className="dictionary-list">
             <p>Dictionary content will appear here.</p>
           </div>

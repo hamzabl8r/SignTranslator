@@ -1,4 +1,3 @@
-// component/Chat.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
@@ -24,7 +23,6 @@ const Chat = () => {
     const [selectedUser, setSelectedUser] = useState(null);
     const [showUserList, setShowUserList] = useState(false);
     const [showVideoCall, setShowVideoCall] = useState(false);
-    // ✅ FIX: Track incoming call at Chat level so VideoCall can be shown automatically
     const [pendingIncomingCall, setPendingIncomingCall] = useState(null);
     
     const dispatch = useDispatch();
@@ -50,14 +48,14 @@ const Chat = () => {
                     console.log('New message received:', message);
                     dispatch(addMessage(message));
                     dispatch(getConversations());
-                    soundService.playMessageReceived(); // 🔔 son message reçu
+                    soundService.playMessageReceived(); 
                     toast.success(`New message from ${message.sender?.firstName || 'Unknown'}`);
                 });
                 
                 socketService.on('message_sent', (message) => {
                     console.log('Message sent:', message);
                     dispatch(addMessage(message));
-                    soundService.playMessageSent(); // 📤 son message envoyé
+                    soundService.playMessageSent();
                 });
                 
                 socketService.on('messages_read', (data) => {
@@ -67,8 +65,7 @@ const Chat = () => {
                     }
                 });
 
-                // ✅ FIX: Listen for incoming_call HERE (Chat is always mounted)
-                // This ensures the listener is active even when VideoCall is not open
+                
                 socketService.on('incoming_call', (data) => {
                     console.log('📞 INCOMING CALL received in Chat.jsx:', data);
                     
@@ -76,7 +73,7 @@ const Chat = () => {
                         // Save the incoming call data and open VideoCall component
                         setPendingIncomingCall(data);
                         setShowVideoCall(true);
-                        soundService.startRingtone(); // 📞 sonnerie appel entrant
+                        soundService.startRingtone(); 
 
                         // Show a toast notification as backup
                         toast(`📞 Incoming call from ${data.callerInfo?.name || 'Someone'}`, {
@@ -110,7 +107,7 @@ const Chat = () => {
                 socketService.off('new_message');
                 socketService.off('message_sent');
                 socketService.off('messages_read');
-                socketService.off('incoming_call'); // ✅ Cleanup
+                socketService.off('incoming_call'); 
             };
         }
     }, [currentUser, dispatch, selectedUser]);
@@ -123,7 +120,6 @@ const Chat = () => {
         }
     }, [dispatch, currentUser]);
 
-    // Quand un utilisateur est sélectionné
     useEffect(() => {
         if (selectedUser) {
             const existingConv = conversations?.find(
@@ -144,7 +140,6 @@ const Chat = () => {
         }
     }, [selectedUser, conversations, dispatch, currentUser]);
 
-    // Scroll automatique
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
@@ -184,11 +179,10 @@ const Chat = () => {
         return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
-    // ✅ FIX: When VideoCall closes, clear pending call data
     const handleVideoCallClose = () => {
         setShowVideoCall(false);
         setPendingIncomingCall(null);
-        soundService.stopRingtone(); // arrêter la sonnerie si on ferme
+        soundService.stopRingtone(); 
     };
 
     if (!currentUser) {
@@ -371,7 +365,6 @@ const Chat = () => {
                 <VideoCall
                     currentUser={currentUser}
                     selectedUser={selectedUser}
-                    // ✅ FIX: Pass the pending incoming call data to VideoCall
                     initialIncomingCall={pendingIncomingCall}
                     onClose={handleVideoCallClose}
                 />

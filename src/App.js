@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import './App.css';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { userCurrent } from './redux/Slice/userSlice'; 
 import { Toaster } from 'react-hot-toast';
@@ -19,6 +19,7 @@ import Chat from './component/Chat';
 
 import process from 'process';
 import { Buffer } from 'buffer';
+import AdminDashboard from './component/AdminDashboard';
 
 window.process = process;
 window.Buffer = Buffer;
@@ -37,7 +38,6 @@ const App = () => {
           setIsLoading(false);
         })
         .catch(() => {
-          // Si erreur, on supprime le token invalide
           localStorage.removeItem("token");
           setIsLoading(false);
         });
@@ -46,7 +46,6 @@ const App = () => {
     }
   }, [dispatch]);
 
-  // Afficher loading seulement pendant le chargement initial
   if (isLoading) {
     return (
       <div style={{
@@ -104,10 +103,14 @@ const App = () => {
               {/* Routes protégées */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/profil" element={<Profil />} />
-                <Route path="/chat" element={<Chat />} />
+                <Route path="/chat" element={<Chat />}/> 
+                  <Route 
+                    path="/admin" 
+                    element={user?.isAdmin ? <AdminDashboard /> : <Navigate to="/" />} 
+                  />
               </Route>
               
-              <Route path="*" element={<h1>404: Page Not Found</h1>} />
+              <Route path="*" element={<h1>404: Page Not Found</h1>} /> 
             </Routes>
           </main>
         </div>

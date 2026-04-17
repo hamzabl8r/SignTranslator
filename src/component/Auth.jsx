@@ -29,8 +29,8 @@ const Auth = () => {
 
     if (userLogin.fulfilled.match(resultAction)) {
       await dispatch(userCurrent());
-      console.log("Login successful, navigating to translator");
-      navigate(`/translator`);
+      console.log("Login successful, navigating to profil");
+      navigate(`/profil`);
     } else {
       const errorMessage = resultAction.payload?.msg || 
                           resultAction.error?.message ||
@@ -83,6 +83,7 @@ const Auth = () => {
         isAdmin: false,
       });
       setdateOfBirth("");
+      navigate(`/profil`);
     } else {
       const errorMessage = resultAction.payload?.msg || 
                           resultAction.error?.message ||

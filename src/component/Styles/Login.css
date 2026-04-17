@@ -1,135 +1,185 @@
-.login{
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 80vh
+/* Container for both Login and Register views */
+.login, .register {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  background: radial-gradient(circle at top right, #1a3a6d, var(--bg-deep));
 }
 
-.login-container{
-    background-color: #1F2937;
-    padding: 40px;
-    border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    width: 500px;
-}
-.logo{
-    height: 90px;
-    width: 400px;
-    margin-bottom: 20px;
-
-}
-.logo-png{
-    height: 100%;
-    width: 100%;
-    object-fit: contain;
-}
-.btn-head{
-    display: flex;
-    justify-content: center;
-    margin-bottom: 20px;
-    gap: 20px;
-}
-.btn-login, .btn-register{
-    padding: 10px 20px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 16px;
-    color: #fff;
-    background-color: #3B82F6;
-    transition: background-color 0.3s ease;
-    &:hover{
-        background-color: #2563EB;
-    }
-} 
-.active{
-    background-color: #2ecc71;
+.login-container, .register-container {
+  background: var(--card-bg);
+  width: 100%;
+  max-width: 450px;
+  padding: 40px;
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(189, 232, 245, 0.1); /* Subtle light blue border */
+  text-align: center;
 }
 
-.login-form form{
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-    gap: 2px;
+/* Logo Styling */
+.logo {
+  margin-bottom: 25px;
 }
-.login-form input{
-    padding: 10px;
-    width: 100%;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    margin-bottom: 15px;
-    background-color: #3b4b61;
+
+.logo-png {
+  height: 70px;
+  width: auto;
 }
-.login-form input:focus{
-    outline: none;
-    border-color: #3B82F6;
+
+/* Toggle Buttons (Login/Register Switch) */
+.btn-head {
+  display: flex;
+  background: rgba(15, 40, 84, 0.5);
+  padding: 5px;
+  border-radius: 12px;
+  margin-bottom: 30px;
 }
-.double-btn{
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-}
-.login-btn{
-    padding: 10px 20px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 16px;
-    color: #fff;
-    background-color: #3B82F6;
-    transition: background-color 0.3s ease;
-    &:hover{
-        background-color: #2563EB;
-    }
-}
-.forgot-password{
-    margin-top: 10px;
-    font-size: 14px;
-    color: #3B82F6;
-    text-decoration: none;
-}
-.forgot-btn{
-    background: none;
-    border: none;
-    color: #3B82F6;
-    cursor: pointer;
-    font-size: 14px;
-}
-.buttonStyle{
-    display: flex;  
-    align-Items: center;
-  padding: 10px 20px;
-  margin-top: 10px;
+
+.btn-head button {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: transparent;
+  color: var(--light-blue);
+  font-weight: 600;
   cursor: pointer;
-  border-Radius: 5px;
-  border: 1px solid #ccc;
-  background: white;
-  font-Weight: bold
-};
-/* Responsive for Auth (Login/Register) */
-@media (max-width: 770px) {
-    .login-container, .register-container {
-        width: 90%;
-        padding: 25px;
-    }
-    .logo {
-        width: 100%;
-        height: auto;
-    }
+  border-radius: 8px;
+  transition: 0.3s ease;
 }
 
-@media (max-width: 550px) {
-    .login, .register {
-        height: auto;
-        padding: 40px 0;
-    }
-    .double-btn {
-        flex-direction: column;
-        width: 100%;
-    }
-    .login-btn, .register-btn {
-        width: 100%;
-    }
+.btn-head button.active {
+  background: var(--accent-blue);
+  color: white;
+}
+
+/* Forms & Inputs */
+.login-form form, .register-form form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.input {
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(15, 40, 84, 0.6);
+  border: 1px solid rgba(73, 136, 196, 0.3);
+  border-radius: 10px;
+  color: white;
+  font-size: 1rem;
+  transition: 0.3s;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  background: rgba(15, 40, 84, 0.8);
+  box-shadow: 0 0 0 4px rgba(73, 136, 196, 0.15);
+}
+
+.input::placeholder {
+  color: rgba(189, 232, 245, 0.5);
+}
+
+/* Action Buttons */
+.login-btn, .register-btn {
+  background: linear-gradient(135deg, var(--accent-blue), #3a71a5);
+  color: white;
+  border: none;
+  padding: 14px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  margin-top: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.login-btn:hover, .register-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(73, 136, 196, 0.4);
+}
+
+/* Google Button */
+.buttonStyle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  color: #333;
+  border: none;
+  padding: 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: 0.3s;
+}
+
+.buttonStyle:hover {
+  background: #f1f1f1;
+}
+
+/* Links (Forgot Password) */
+.double-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.forgot-password {
+  text-decoration: none;
+}
+
+.forgot-btn {
+  background: transparent;
+  border: none;
+  color: var(--light-blue);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.forgot-btn:hover {
+  color: white;
+  text-decoration: underline;
+}
+
+/* Target the date input specifically */
+input[type="date"].input {
+    position: relative;
+    color-scheme: dark; /* Tells the browser to use a dark calendar picker if available */
+    cursor: pointer;
+}
+
+/* Style the calendar icon to match your --light-blue */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%23BDE8F5" viewBox="0 0 16 16"><path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5zM1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4H1z"/></svg>');
+    background-position: center;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    opacity: 0.8;
+    transition: 0.3s;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+/* Fix for placeholder text in date inputs */
+input[type="date"]::before {
+    content: attr(placeholder);
+    width: 100%;
+    color: rgba(189, 232, 245, 0.5);
+}
+
+input[type="date"]:focus::before,
+input[type="date"]:valid::before {
+    display: none;
 }

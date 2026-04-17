@@ -1,14 +1,11 @@
-// component/VideoCall.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import Peer from 'simple-peer';
 import socketService from '../services/socketService';
 import soundService from '../services/soundService';
 import './Styles/VideoCall.css';
 
-// ✅ FIX: Accept initialIncomingCall prop — passed from Chat.jsx when call arrives
 const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) => {
     const [callStatus, setCallStatus] = useState('idle');
-    // ✅ FIX: Pre-populate incomingCall from prop if available
     const [incomingCall, setIncomingCall] = useState(initialIncomingCall || null);
     const [error, setError] = useState(null);
     
@@ -17,7 +14,6 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
     const peerRef = useRef(null);
     const streamRef = useRef(null);
     const isEndingRef = useRef(false);
-    // ✅ FIX: Use ref to track callStatus for use inside setTimeout (avoids stale closure)
     const callStatusRef = useRef('idle');
 
     const setCallStatusSafe = (status) => {
@@ -47,7 +43,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
         if (isEndingRef.current) return;
         
         soundService.stopRingtone();
-        soundService.playCallEnded(); // 🔚 son fin d'appel
+        soundService.playCallEnded(); 
         cleanup();
         
         if (socketService.isConnected() && selectedUser) {
@@ -61,7 +57,6 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
         onClose();
     };
 
-    // ✅ FIX: If opened because of an incoming call, set status to 'ringing' immediately
     useEffect(() => {
         if (initialIncomingCall && initialIncomingCall.fromUserId !== currentUser._id) {
             console.log('📞 VideoCall opened with pending incoming call:', initialIncomingCall);
@@ -82,8 +77,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
         }
         
         const setupVideoListeners = () => {
-            // ✅ FIX: Do NOT listen for incoming_call here anymore
-            // Chat.jsx handles it and passes it via initialIncomingCall prop
+            
             
             socketService.on('call_accepted', (data) => {
                 console.log('✅ CALL ACCEPTED:', data);
@@ -91,14 +85,14 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                     peerRef.current.signal(data.signal);
                 }
                 soundService.stopRingtone();
-                soundService.playCallConnected(); // 🎵 appel connecté
+                soundService.playCallConnected();
                 setCallStatusSafe('connected');
             });
             
             socketService.on('call_rejected', (data) => {
                 console.log('❌ CALL REJECTED:', data);
                 soundService.stopRingtone();
-                soundService.playCallRejected(); // ❌ appel rejeté
+                soundService.playCallRejected(); 
                 setError('Call was rejected');
                 setTimeout(() => {
                     if (!isEndingRef.current) endCall();
@@ -109,7 +103,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                 console.log('🔚 CALL ENDED:', data);
                 if (!isEndingRef.current) {
                     soundService.stopRingtone();
-                    soundService.playCallEnded(); // 🔚 appel terminé
+                    soundService.playCallEnded(); 
                     setError('Call ended');
                     setTimeout(() => {
                         cleanup();
@@ -150,7 +144,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
             console.log('🎥 Starting call to:', selectedUser?._id);
             setCallStatusSafe('calling');
             setError(null);
-            soundService.playDialTone(); // 📞 tonalité d'appel sortant
+            soundService.playDialTone(); 
             
             if (!socketService.isConnected()) {
                 throw new Error('Socket not connected');
@@ -198,7 +192,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                 if (remoteVideoRef.current && !isEndingRef.current) {
                     remoteVideoRef.current.srcObject = remoteStream;
                 }
-                soundService.playCallConnected(); // 🎵 connexion établie
+                soundService.playCallConnected(); 
                 setCallStatusSafe('connected');
             });
             
@@ -212,7 +206,6 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
             
             peerRef.current = peer;
             
-            // ✅ FIX: Use ref instead of state variable to avoid stale closure
             setTimeout(() => {
                 if (callStatusRef.current === 'calling' && !isEndingRef.current) {
                     console.log('⚠️ No response after 30 seconds');
@@ -271,7 +264,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                     remoteVideoRef.current.srcObject = remoteStream;
                 }
                 soundService.stopRingtone();
-                soundService.playCallConnected(); // 🎵 appel accepté connecté
+                soundService.playCallConnected(); 
                 setCallStatusSafe('connected');
             });
             
@@ -300,7 +293,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
     
     const rejectCall = () => {
         console.log('📞 Rejecting call');
-        soundService.stopRingtone(); // arrêter la sonnerie
+        soundService.stopRingtone();
         if (incomingCall && !isEndingRef.current) {
             socketService.emit('reject_call', {
                 fromUserId: incomingCall.fromUserId,

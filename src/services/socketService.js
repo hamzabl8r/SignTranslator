@@ -1,4 +1,3 @@
-// services/socketService.js
 import { io } from 'socket.io-client';
 
 const SOCKET_URL = "https://backpfe-production.up.railway.app";
@@ -15,15 +14,12 @@ class SocketService {
 
         const userIdStr = userId.toString();
 
-        // ✅ FIX: If already connected for the same user, reuse existing socket
         if (this.socket && this.socket.connected && this.userId === userIdStr) {
             console.log('✅ Socket already initialized and connected for user:', userIdStr);
-            // Re-register just in case server restarted
             this.socket.emit('register', userIdStr);
             return this.socket;
         }
 
-        // ✅ FIX: If socket exists but for a different user, disconnect first
         if (this.socket) {
             console.log('♻️ Disconnecting old socket before reinitializing');
             this.disconnect();
@@ -35,17 +31,14 @@ class SocketService {
             reconnection: true,
             reconnectionAttempts: 10,
             reconnectionDelay: 1000,
-            // ✅ FIX: Force new connection (don't reuse old one)
             forceNew: true,
         });
 
         this.socket.on('connect', () => {
             console.log('✅ Global socket connected:', this.socket.id);
-            // ✅ FIX: Always register after (re)connect
             this.socket.emit('register', userIdStr);
         });
 
-        // ✅ FIX: Re-register on reconnection too
         this.socket.on('reconnect', () => {
             console.log('🔄 Socket reconnected, re-registering user:', userIdStr);
             this.socket.emit('register', userIdStr);
@@ -73,7 +66,6 @@ class SocketService {
     on(event, callback) {
         if (!this.socket) return;
         
-        // ✅ FIX: Avoid duplicate listeners for the same event+callback
         if (!this.listeners.has(event)) {
             this.listeners.set(event, []);
         }

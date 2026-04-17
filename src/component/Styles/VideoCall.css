@@ -1,4 +1,3 @@
-/* Styles/VideoCall.css */
 .video-call-overlay {
     position: fixed;
     top: 0;
@@ -165,7 +164,6 @@
         padding: 10px 20px;
     }
 }
-/* Responsive for VideoCall */
 @media (max-width: 770px) {
     .local-video {
         width: 150px;

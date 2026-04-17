@@ -1,4 +1,3 @@
-/* Chat.css */
 :root {
     --bg-color: #0F172A;
     --card-color: #242731;
@@ -456,7 +455,7 @@
     color: var(--text-dim);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
-/* Ajouter dans Chat.css */
+
 .chat-header {
     display: flex;
     align-items: center;

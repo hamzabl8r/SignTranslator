@@ -202,7 +202,7 @@ const Profil = () => {
                         ) : (
                             <div className="info-edit">
                                 <div className="edit-field">
-                                    <label>First Name</label>
+                                    <label>First Name : </label>
                                     <input
                                         type="text"
                                         name="firstName"
@@ -213,7 +213,7 @@ const Profil = () => {
                                     />
                                 </div>
                                 <div className="edit-field">
-                                    <label>Last Name</label>
+                                    <label>Last Name : </label>
                                     <input
                                         type="text"
                                         name="lastName"
@@ -224,7 +224,7 @@ const Profil = () => {
                                     />
                                 </div>
                                 <div className="edit-field">
-                                    <label>Email</label>
+                                    <label>Email : </label>
                                     <input
                                         type="email"
                                         name="email"
@@ -235,7 +235,7 @@ const Profil = () => {
                                     />
                                 </div>
                                 <div className="edit-field">
-                                    <label>Phone Number</label>
+                                    <label>Phone Number : </label>
                                     <input
                                         type="tel"
                                         name="phoneNumber"
@@ -246,7 +246,7 @@ const Profil = () => {
                                     />
                                 </div>
                                 <div className="edit-field">
-                                    <label>Date of Birth</label>
+                                    <label>Date of Birth : </label>
                                     <input
                                         type="date"
                                         name="dateOfBirth"

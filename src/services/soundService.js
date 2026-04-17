@@ -1,6 +1,3 @@
-// services/soundService.js
-// Uses Web Audio API - no external files needed, all sounds generated programmatically
-
 class SoundService {
     constructor() {
         this.audioContext = null;
@@ -10,12 +7,10 @@ class SoundService {
         this.volume = 1.0;
     }
 
-    // ✅ Lazy init AudioContext (browsers require user interaction first)
     getContext() {
         if (!this.audioContext) {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
-        // Resume if suspended (autoplay policy)
         if (this.audioContext.state === 'suspended') {
             this.audioContext.resume();
         }
@@ -31,7 +26,6 @@ class SoundService {
         this.volume = Math.max(0, Math.min(1, vol));
     }
 
-    // ─── Internal helpers ───────────────────────────────────────────────────
 
     _playTone({ frequency, type = 'sine', duration, gainStart = 0.3, gainEnd = 0, startTime = 0, detune = 0 }) {
         const ctx = this.getContext();
@@ -81,19 +75,15 @@ class SoundService {
         source.start(ctx.currentTime + startTime);
     }
 
-    // ─── Message Sounds ──────────────────────────────────────────────────────
 
-    // Soft "pop" for incoming message
     playMessageReceived() {
         if (this.isMuted) return;
         try {
-            // Two-tone soft notification
             this._playTone({ frequency: 880, type: 'sine', duration: 0.08, gainStart: 0.25, gainEnd: 0.1 });
             this._playTone({ frequency: 1100, type: 'sine', duration: 0.12, gainStart: 0.2, gainEnd: 0.001, startTime: 0.07 });
         } catch (e) { console.warn('Sound error:', e); }
     }
 
-    // Subtle "whoosh" for sent message
     playMessageSent() {
         if (this.isMuted) return;
         try {
@@ -115,13 +105,10 @@ class SoundService {
         } catch (e) { console.warn('Sound error:', e); }
     }
 
-    // ─── Video Call Sounds ───────────────────────────────────────────────────
 
-    // Classic phone ringtone pattern (repeating)
     _ringOnce() {
         try {
             const ctx = this.getContext();
-            // Two beeps then pause = classic ring pattern
             const beepDuration = 0.15;
             const beepGap = 0.1;
             const freq = 440;
@@ -140,7 +127,7 @@ class SoundService {
         this._ringOnce();
         this.ringtoneInterval = setInterval(() => {
             if (this.isRinging) this._ringOnce();
-        }, 2000); // ring every 2 seconds
+        }, 2000); 
     }
 
     stopRingtone() {
@@ -151,28 +138,23 @@ class SoundService {
         }
     }
 
-    // Outgoing call dial tone
     playDialTone() {
         if (this.isMuted) return;
         try {
-            // DTMF-style dual tone
             this._playTone({ frequency: 350, type: 'sine', duration: 0.4, gainStart: 0.15, gainEnd: 0.12 });
             this._playTone({ frequency: 440, type: 'sine', duration: 0.4, gainStart: 0.15, gainEnd: 0.12 });
         } catch (e) { console.warn('Sound error:', e); }
     }
 
-    // Call connected chime
     playCallConnected() {
         if (this.isMuted) return;
         try {
-            // Rising happy chord
             this._playTone({ frequency: 523, type: 'sine', duration: 0.2, gainStart: 0.3, gainEnd: 0.001, startTime: 0 });
             this._playTone({ frequency: 659, type: 'sine', duration: 0.2, gainStart: 0.3, gainEnd: 0.001, startTime: 0.1 });
             this._playTone({ frequency: 784, type: 'sine', duration: 0.3, gainStart: 0.3, gainEnd: 0.001, startTime: 0.2 });
         } catch (e) { console.warn('Sound error:', e); }
     }
 
-    // Call ended - descending tone
     playCallEnded() {
         if (this.isMuted) return;
         try {
@@ -182,7 +164,6 @@ class SoundService {
         } catch (e) { console.warn('Sound error:', e); }
     }
 
-    // Call rejected - short negative tone
     playCallRejected() {
         if (this.isMuted) return;
         try {

@@ -1,11 +1,9 @@
-// redux/Slice/messageSlice.js
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 import socketService from '../../services/socketService';
 
 const API_URL = "https://backpfe-production.up.railway.app/api/messages";
 
-// Initialiser le socket
 export const initializeSocket = (userId) => {
     if (userId) {
         return socketService.initialize(userId);
@@ -25,7 +23,6 @@ export const markReadSocket = ({ conversationId, userId }) => {
     socketService.emit('mark_read', { conversationId, userId });
 };
 
-// Récupérer les utilisateurs
 export const getAllUsers = createAsyncThunk(
     "message/getAllUsers",
     async (_, thunkAPI) => {
@@ -61,7 +58,6 @@ export const getConversations = createAsyncThunk(
     }
 );
 
-// Récupérer les messages d'une conversation
 export const getMessages = createAsyncThunk(
     "message/getMessages",
     async (conversationId, thunkAPI) => {

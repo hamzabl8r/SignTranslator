@@ -103,10 +103,8 @@ export const resetPassword = createAsyncThunk(
   async ({ token, password }, { rejectWithValue }) => {
     try {
       const response = await axios.put(`${API_URL}/user/reset-password/${token}`, { password });
-      // S'assurer que response.data est bien un objet avec msg
       return { msg: response.data.msg || "Password reset successfully" };
     } catch (error) {
-      // S'assurer que l'erreur est un objet avec msg
       const errorMsg = error.response?.data?.msg || error.response?.data?.message || "Reset failed";
       return rejectWithValue({ msg: errorMsg });
     }
@@ -114,14 +112,13 @@ export const resetPassword = createAsyncThunk(
 );
 export const updateProfilePic = createAsyncThunk(
   "user/updatePic",
-  async ({ formData }, thunkAPI) => {  // Plus besoin de id
+  async ({ formData }, thunkAPI) => {  
     try {
       let token = localStorage.getItem("token");
       if (!token) return thunkAPI.rejectWithValue("No token found");
       
       const authHeader = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
       
-      // Enlever l'ID de l'URL
       const response = await axios.put(`${API_URL}/user/update-pic`, formData, {
         headers: { 
           "Content-Type": "multipart/form-data", 
@@ -167,24 +164,7 @@ export const userSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      /* --- Success Handlers (addCase) --- */
-      // .addCase(userRegister.fulfilled, (state, action) => {
-      //   state.status = "success";
-      //   state.user = action.payload.user;
-      //   state.token = action.payload.token;
-      //   localStorage.setItem("token", action.payload.token);
-      // })
-      // .addCase(userLogin.fulfilled, (state, action) => {
-      //   state.status = "success";
-      //   state.user = action.payload.user;
-      //   state.token = action.payload.token;
-      //   localStorage.setItem("token", action.payload.token);
-      // })
-      // .addCase(userCurrent.fulfilled, (state, action) => {
-      //   state.status = "success";
-      //   state.user = action.payload.user;
-      // })
-      // User Registration
+      
             .addCase(userRegister.pending, (state) => {
               state.status = "pending";
               state.error = null;
@@ -272,7 +252,7 @@ export const userSlice = createSlice({
       .addCase(resetPassword.fulfilled, (state, action) => {
     state.status = "succeeded";
     if (action.payload?.msg) {
-      state.message = action.payload.msg;  // Extraire la propriété msg
+      state.message = action.payload.msg;  
     } else if (typeof action.payload === 'string') {
       state.message = action.payload;
     } else {
@@ -282,10 +262,9 @@ export const userSlice = createSlice({
   })
   .addCase(resetPassword.rejected, (state, action) => {
     state.status = "failed";
-    // S'assurer que error est une string, pas un objet
     const payload = action.payload;
     if (payload?.msg) {
-      state.error = payload.msg;  // Extraire la propriété msg
+      state.error = payload.msg;  
     } else if (typeof payload === 'string') {
       state.error = payload;
     } else {
