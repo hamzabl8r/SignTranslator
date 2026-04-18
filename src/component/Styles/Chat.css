@@ -32,6 +32,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    height: 10%;
 }
 
 .sidebar-header h3 {
@@ -196,6 +197,7 @@
     display: flex;
     align-items: center;
     gap: 15px;
+    height: 10%;
 }
 
 .chat-header img {

@@ -70,13 +70,12 @@ const Chat = () => {
                     console.log('📞 INCOMING CALL received in Chat.jsx:', data);
                     
                     if (data.fromUserId !== currentUser._id) {
-                        // Save the incoming call data and open VideoCall component
                         setPendingIncomingCall(data);
                         setShowVideoCall(true);
                         soundService.startRingtone(); 
 
                         // Show a toast notification as backup
-                        toast(`📞 Incoming call from ${data.callerInfo?.name || 'Someone'}`, {
+                        toast(` Incoming call from ${data.callerInfo?.name || 'Someone'}`, {
                             duration: 10000,
                             icon: '📞',
                         });
