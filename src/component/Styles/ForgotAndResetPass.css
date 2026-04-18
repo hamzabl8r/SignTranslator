@@ -1,47 +1,125 @@
-.auth-container{
+/* Utilisation des variables de App.css */
+.auth-container {
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100vh;
+    min-height: 100vh;
+    padding: 20px;
+    background-color: var(--bg-deep); /* */
 }
-.auth-card{
-    background-color: #1e293b;
+
+.auth-card {
+    background-color: var(--card-bg); /* */
     padding: 40px;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    width: 500px;
-    height: 300px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: 450px; /* Plus équilibré pour le responsive */
+    border: 1px solid rgba(73, 136, 196, 0.2); /* Basé sur accent-blue */
+    transition: transform 0.3s ease;
 }
-.auth-card h2{
-    color: #fff;
-    margin-bottom: 20px;
-    text-align: center ;
-}
-.auth-car p{
-    color: #fff;
+
+.auth-card h2 {
+    color: var(--light-blue); /* */
+    margin-bottom: 12px;
     text-align: center;
+    font-size: 1.8rem;
+    font-weight: 700;
 }
-.auth-card form{
+
+.auth-card p {
+    color: var(--text-dim); /* */
+    text-align: center;
+    margin-bottom: 25px;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.auth-card form {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 15px;
 }
 
-.auth-card input{
-    padding: 10px;
-    border: none;
-    border-radius: 4px;
-    background-color: #3b4b61;
-    width: 450px;
-
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
-.auth-card button{
-    padding: 10px;
+
+.form-group label {
+    color: var(--light-blue); /* */
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.auth-card input {
+    padding: 12px 15px;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    background-color: rgba(15, 40, 84, 0.5); /* bg-deep avec opacité */
+    color: var(--text-main); /* */
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    width: 100%; /* Important pour le responsive */
+}
+
+.auth-card input:focus {
+    outline: none;
+    border-color: var(--accent-blue); /* */
+    background-color: var(--bg-deep); /* */
+}
+
+.auth-btn {
+    padding: 12px;
     border: none;
-    border-radius: 4px;
-    background-color: #3b82f6;
-    color: #fff;
+    border-radius: 8px;
+    background-color: var(--accent-blue); /* */
+    color: var(--text-main); /* */
+    font-size: 1rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: background-color 0.3s ease;
+    transition: all 0.3s ease;
+    margin-top: 10px;
+}
+
+.auth-btn:hover:not(:disabled) {
+    background-color: #3a72a5; /* Version légèrement plus sombre de accent-blue */
+    transform: translateY(-2px);
+}
+
+.auth-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.success-message {
+    color: var(--success); /* */
+    background-color: rgba(46, 204, 113, 0.1);
+    padding: 10px;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 0.9rem;
+    margin-top: 15px;
+}
+
+.error-message {
+    color: var(--danger); /* */
+    background-color: rgba(231, 76, 60, 0.1);
+    padding: 10px;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 0.9rem;
+    margin-top: 15px;
+}
+
+/* Media Query pour Mobile */
+@media (max-width: 480px) {
+    .auth-card {
+        padding: 25px;
+    }
+    
+    .auth-card h2 {
+        font-size: 1.5rem;
+    }
 }

@@ -6,24 +6,38 @@ import './Styles/ForgotAndResetPass.css';
 const ForgotPassword = () => {
     const [email, setEmail] = useState('');
     const dispatch = useDispatch();
+    
     const { status, message, error } = useSelector((state) => state.user);
+
+    // Fonction pour extraire le texte correctement
+    const getMessageText = (msg) => {
+        if (!msg) return '';
+        if (typeof msg === 'string') return msg;
+        if (msg?.msg) return msg.msg;           
+        if (msg?.message) return msg.message;   // Autre cas possible
+        return JSON.stringify(msg);             // Fallback
+    };
 
     useEffect(() => {
         return () => {
             dispatch(clearMessage());
+            // dispatch(clearAuthFeedback());
         };
     }, [dispatch]);
 
     const handleSubmit = (e) => {
-        e.preventDefault();
-        dispatch(forgotPassword({ email }));
-    };
+    e.preventDefault();
+    if (email) {
+        dispatch(forgotPassword(email));  
+    }
+};
 
     return (
         <div className="auth-container">
             <div className="auth-card">
                 <h2>Forgot Password</h2>
                 <p>Enter your email, and we'll send you a link to reset your password.</p>
+                
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <input
@@ -35,11 +49,26 @@ const ForgotPassword = () => {
                             required
                         />
                     </div>
-                    <button type="submit" className="auth-btn" disabled={status === 'loading'}>
+
+                    <button 
+                        type="submit" 
+                        className="auth-btn" 
+                        disabled={status === 'loading'}
+                    >
                         {status === 'loading' ? 'Sending...' : 'Send Reset Link'}
                     </button>
-                    {message && <p className="success-message">{message}</p>}
-                    {error && <p className="error-message">{error}</p>}
+
+                    {message && (
+                        <p className="success-message">
+                            {getMessageText(message)}
+                        </p>
+                    )}
+
+                    {error && (
+                        <p className="error-message">
+                            {getMessageText(error)}
+                        </p>
+                    )}
                 </form>
             </div>
         </div>

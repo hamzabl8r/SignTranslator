@@ -41,7 +41,7 @@ export const userCurrent = createAsyncThunk(
 
       const response = await axios.get(`${API_URL}/user/current`, {
         headers: {
-          Authorization: authHeader, 
+          Authorization: authHeader,
         },
       });
       return response.data;
@@ -50,6 +50,7 @@ export const userCurrent = createAsyncThunk(
     }
   }
 );
+
 export const editUser = createAsyncThunk(
   "user/update",
   async ({ id, editprofil }, { rejectWithValue }) => {
@@ -88,12 +89,21 @@ export const getAllUsers = createAsyncThunk(
 
 export const forgotPassword = createAsyncThunk(
   "user/forgotPassword",
-  async (email, { rejectWithValue }) => {
+  async (email, { rejectWithValue }) => {  
     try {
-      const response = await axios.post(`${API_URL}/user/forgot-password`, { email });
-      return response.data.message;
+      console.log("Sending forgot password request for:", email); 
+      
+      const response = await axios.post(`http://localhost:5000/user/forgot-password`, { email });
+      
+      console.log("Response:", response.data); 
+      return response.data;
     } catch (error) {
-      return rejectWithValue(error.response?.data || "Erreur envoi email");
+      console.error("Forgot password error:", error.response?.data || error.message);
+      
+      if (error.response?.data?.msg) {
+        return rejectWithValue(error.response.data.msg);
+      }
+      return rejectWithValue("Failed to send reset link. Please try again.");
     }
   }
 );
@@ -110,9 +120,10 @@ export const resetPassword = createAsyncThunk(
     }
   }
 );
+
 export const updateProfilePic = createAsyncThunk(
   "user/updatePic",
-  async ({ formData }, thunkAPI) => {  
+  async ({ formData }, thunkAPI) => {
     try {
       let token = localStorage.getItem("token");
       if (!token) return thunkAPI.rejectWithValue("No token found");
@@ -120,24 +131,32 @@ export const updateProfilePic = createAsyncThunk(
       const authHeader = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
       
       const response = await axios.put(`${API_URL}/user/update-pic`, formData, {
-        headers: { 
-          "Content-Type": "multipart/form-data", 
-          "Authorization": authHeader 
+        headers: {
+          "Content-Type": "multipart/form-data",
+          "Authorization": authHeader
         }
       });
       
       return response.data;
-    } catch (error) { 
-      return thunkAPI.rejectWithValue(error.response?.data || "Update failed"); 
+    } catch (error) {
+      return thunkAPI.rejectWithValue(error.response?.data || "Update failed");
     }
   }
 );
+export const fetchHistory = createAsyncThunk('user/fetchHistory', async (_, thunkAPI) => {
+    try {
+        const response = await axios.get('/user/history'); 
+        return response.data; 
+    } catch (error) {
+        return thunkAPI.rejectWithValue(error.response.data);
+    }
+});
 
 // --- Initial State ---
 
 export const initialState = {
   user: null,
-  token: localStorage.getItem("token") || localStorage.getItem("Bearer") || null,
+  token: localStorage.getItem("token") || null,
   status: "idle",
   error: null,
   message: null,
@@ -155,7 +174,6 @@ export const userSlice = createSlice({
       state.token = null;
       state.status = "idle";
       localStorage.removeItem("token");
-      localStorage.removeItem("Bearer");
     },
     clearMessage: (state) => {
       state.message = null;
@@ -164,157 +182,134 @@ export const userSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      
-            .addCase(userRegister.pending, (state) => {
-              state.status = "pending";
-              state.error = null;
-            })
-            .addCase(userRegister.fulfilled, (state, action) => {
-              state.status = "success";
-              state.user = action.payload.user;
-              localStorage.setItem("token", action.payload.token);
-            })
-            .addCase(userRegister.rejected, (state, action) => {
-              state.status = "fail";
-              state.error = action.payload;
-            })
-      
-            // User Login
-            .addCase(userLogin.pending, (state) => {
-              state.status = "pending";
-              state.error = null;
-            })
-            .addCase(userLogin.fulfilled, (state, action) => {
-              state.status = "success";
-              state.user = action.payload.user;
-              state.token = action.payload.token;
-              localStorage.setItem("token", action.payload.token);
-              console.log("Token saved:", action.payload.token); 
-            })
-            .addCase(userLogin.rejected, (state, action) => {
-              state.status = "fail";
-              state.error = action.payload;
-            })
-      
-            // Get Current User
-            .addCase(userCurrent.pending, (state) => {
-              state.status = "pending";
-              state.error = null;
-            })
-            .addCase(userCurrent.fulfilled, (state, action) => {
-              state.status = "success";
-              state.user = action.payload.user;
-            })
-            .addCase(userCurrent.rejected, (state, action) => {
-              state.status = "fail";
-              state.error = action.payload;
-            })
-      // Edit User
-            .addCase(editUser.pending, (state) => {
-              state.status = "pending";
-              state.error = null;
-            })
-            .addCase(editUser.fulfilled, (state, action) => {
-              state.status = "success";
-              state.user = action.payload;
-            })
-            .addCase(editUser.rejected, (state, action) => {
-              state.status = "fail";
-              state.error = action.payload;
-            })
-            
-            // Get all users
-            .addCase(getAllUsers.pending, (state) => {
-              state.status = "pending";
-            })
-            .addCase(getAllUsers.fulfilled, (state, action) => {
-              state.status = "success";
-              state.userList = action.payload.users;
-            })
-            .addCase(getAllUsers.rejected, (state, action) => {
-              state.status = "fail";
-              state.error = action.payload;
-            })
-      
-            // Delete user
-            .addCase(deleteUser.pending, (state) => {
-              state.status = "pending";
-              state.error = null;
-            })
-            .addCase(deleteUser.fulfilled, (state, action) => {
-              state.status = "success";
-              state.userList = action.payload.data;
-            })
-            .addCase(deleteUser.rejected, (state, action) => {
-              state.status = "fail";
-              state.error = action.payload;
-            })
-      .addCase(resetPassword.fulfilled, (state, action) => {
-    state.status = "succeeded";
-    if (action.payload?.msg) {
-      state.message = action.payload.msg;  
-    } else if (typeof action.payload === 'string') {
-      state.message = action.payload;
-    } else {
-      state.message = "Password reset successfully!";
-    }
-    state.error = null;
-  })
-  .addCase(resetPassword.rejected, (state, action) => {
-    state.status = "failed";
-    const payload = action.payload;
-    if (payload?.msg) {
-      state.error = payload.msg;  
-    } else if (typeof payload === 'string') {
-      state.error = payload;
-    } else {
-      state.error = "Failed to reset password";
-    }
-    state.message = null;
-  })
-      .addCase(forgotPassword.fulfilled, (state, action) => {
-    state.status = "success";
-    if (action.payload?.msg) {
-      state.message = action.payload.msg;
-    } else if (typeof action.payload === 'string') {
-      state.message = action.payload;
-    } else {
-      state.message = "Reset link sent to your email";
-    }
-    state.error = null;
-  })
-  .addCase(forgotPassword.rejected, (state, action) => {
-    state.status = "fail";
-    if (action.payload?.msg) {
-      state.error = action.payload.msg;
-    } else if (typeof action.payload === 'string') {
-      state.error = action.payload;
-    } else {
-      state.error = "Failed to send reset link";
-    }
-    state.message = null;
-  })
-      // add photo
-      .addCase(updateProfilePic.fulfilled, (state, action) => {
-        state.status = "success";
-        state.user = action.payload.user || action.payload; 
+      .addCase(userRegister.pending, (state) => {
+        state.status = "loading";
+        state.error = null;
+      })
+      .addCase(userRegister.fulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.user = action.payload.user;
+        if (action.payload.token) {
+          state.token = action.payload.token;
+          localStorage.setItem("token", action.payload.token);
+        }
+      })
+      .addCase(userRegister.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload;
       })
 
-      /* --- Pending & Rejected Handlers (addMatcher) --- */
-      .addMatcher(
-        (action) => action.type.endsWith("/pending"),
-        (state) => {
-          state.status = "pending";
-          state.error = null;
-        }
-      )
-      .addMatcher(
-        (action) => action.type.endsWith("/rejected"),
-        (state, action) => {
-          state.status = "fail";
-          state.error = action.payload;
-        }
-      );
+      .addCase(userLogin.pending, (state) => {
+        state.status = "loading";
+        state.error = null;
+      })
+      .addCase(userLogin.fulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.user = action.payload.user;
+        state.token = action.payload.token;
+        localStorage.setItem("token", action.payload.token);
+      })
+      .addCase(userLogin.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload;
+      })
+
+      .addCase(userCurrent.pending, (state) => {
+        state.status = "loading";
+        state.error = null;
+      })
+      .addCase(userCurrent.fulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.user = action.payload.user;
+      })
+      .addCase(userCurrent.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload;
+      })
+
+      .addCase(editUser.pending, (state) => {
+        state.status = "loading";
+        state.error = null;
+      })
+      .addCase(editUser.fulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.user = action.payload.result;
+      })
+      .addCase(editUser.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload;
+      })
+
+      .addCase(getAllUsers.pending, (state) => {
+        state.status = "loading";
+      })
+      .addCase(getAllUsers.fulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.userList = action.payload.users;
+      })
+      .addCase(getAllUsers.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload;
+      })
+
+      .addCase(deleteUser.pending, (state) => {
+        state.status = "loading";
+        state.error = null;
+      })
+      .addCase(deleteUser.fulfilled, (state) => {
+        state.status = "succeeded";
+      })
+      .addCase(deleteUser.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload;
+      })
+
+      .addCase(resetPassword.pending, (state) => {
+        state.status = "loading";
+        state.error = null;
+        state.message = null;
+      })
+      .addCase(resetPassword.fulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.message = action.payload?.msg || "Password reset successfully!";
+        state.error = null;
+      })
+      .addCase(resetPassword.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload?.msg || "Failed to reset password";
+        state.message = null;
+      })
+
+      .addCase(forgotPassword.pending, (state) => {
+        state.status = "loading";
+        state.error = null;
+        state.message = null;
+      })
+      .addCase(forgotPassword.fulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.message = action.payload?.msg || "Reset link sent to your email";
+        state.error = null;
+      })
+      .addCase(forgotPassword.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload?.msg || "Failed to send reset link";
+        state.message = null;
+      })
+
+      .addCase(updateProfilePic.pending, (state) => {
+        state.status = "loading";
+      })
+      .addCase(updateProfilePic.fulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.user = action.payload.user || action.payload;
+      })
+      .addCase(updateProfilePic.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload;
+      })
+      .addCase(fetchHistory.fulfilled, (state, action) => {
+        state.history = action.payload;
+      });
   },
 });
 

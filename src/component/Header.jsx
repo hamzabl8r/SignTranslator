@@ -47,12 +47,13 @@ const Header = () => {
   const isActive = (path) => location.pathname === path;
 
   const navLinks = [
-    { to: '/translator', label: 'Translator' },
-    { to: '/history', label: 'History' },
-    ...(user ? [
-      { to: '/chat', label: 'Chat' },
-    ] : []),
-  ];
+  { to: '/translator', label: 'Translator' },
+  { to: '/history', label: 'History' },
+  ...(user ? [
+    user.isAdmin ? { to: '/admin', label: 'AdminDashboard' } : null,
+    { to: '/chat', label: 'Chat' },
+  ] : []),
+].filter(Boolean);
 
   return (
     <header className={`navbar ${scrolled ? 'navbar--scrolled' : ''}`}>
