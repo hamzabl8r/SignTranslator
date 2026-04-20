@@ -124,6 +124,20 @@
     animation: spin 1s linear infinite;
     margin: 0 auto 15px;
 }
+.prediction-overlay {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.7);
+    color: #00ff00;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    z-index: 100;
+}
+.peer-tag { border: 2px solid #00d2ff; }
+.my-tag { border: 2px solid #ff007f; top: unset; bottom: 10px; font-size: 0.8rem;}
 
 @keyframes spin {
     to { transform: rotate(360deg); }

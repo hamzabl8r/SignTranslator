@@ -3,7 +3,6 @@ import Peer from 'simple-peer';
 import socketService from '../services/socketService';
 import soundService from '../services/soundService';
 import { Hands } from '@mediapipe/hands';
-import * as cam from '@mediapipe/camera_utils';
 import axios from 'axios';
 import './Styles/VideoCall.css';
 
@@ -12,298 +11,184 @@ const AI_SERVER_URL = 'https://zen-footing-depravity.ngrok-free.dev';
 const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) => {
     const [callStatus, setCallStatus] = useState(initialIncomingCall ? 'ringing' : 'idle');
     const [incomingCall, setIncomingCall] = useState(initialIncomingCall || null);
-    const [error, setError] = useState(null);
-    const [localPrediction, setLocalPrediction] = useState("");   // My own sign → sent to peer
-    const [remotePrediction, setRemotePrediction] = useState(""); // Peer's sign → shown to me
+    const [localPrediction, setLocalPrediction] = useState("");   
+    const [remotePrediction, setRemotePrediction] = useState(""); 
 
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
     const peerRef = useRef(null);
     const streamRef = useRef(null);
-    const isEndingRef = useRef(false);
-    const callStatusRef = useRef(callStatus);
-    const aiCameraRef = useRef(null);   // Track MediaPipe camera for cleanup
-    const aiHandsRef = useRef(null);    // Track Hands instance for cleanup
+    const requestRef = useRef();
+    const handsRef = useRef(null);
 
-    // ==================== AI TRANSLATION LOGIC ====================
+    // ==================== 1. AI LOGIC (84 Features) ====================
     const startAI = useCallback(() => {
-        // Prevent multiple instances
-        if (aiCameraRef.current) return;
+        if (handsRef.current) return; // Ma t-7elech akther men wa7da
 
         const hands = new Hands({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
         });
+        handsRef.current = hands;
 
         hands.setOptions({
-            maxNumHands: 1,
+            maxNumHands: 2, 
             modelComplexity: 1,
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5,
         });
 
         hands.onResults(async (results) => {
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const landmarks = results.multiHandLandmarks[0];
-                const data_aux = [];
-                landmarks.forEach(lm => {
-                    data_aux.push(lm.x);
-                    data_aux.push(lm.y);
-                });
-
-                try {
-                    const res = await axios.post(
-                        `${AI_SERVER_URL}/predict`,
-                        { landmarks: data_aux },
-                        { headers: { "ngrok-skip-browser-warning": "69420" } }
-                    );
-
-                    const word = res.data.res;
-                    setLocalPrediction(word); // Show my own sign to myself
-
-                    // Send translation to the remote peer
-                    socketService.emit('send_translation', {
-                        text: word,
-                        toUserId: selectedUser?._id,
-                        fromUserId: currentUser._id
-                    });
-                } catch (err) {
-                    console.error("AI Server Error:", err.message);
-                }
-            }
-        });
-
-        aiHandsRef.current = hands;
-
-        if (localVideoRef.current) {
-            const camera = new cam.Camera(localVideoRef.current, {
-                onFrame: async () => {
-                    if (aiHandsRef.current) {
-                        await aiHandsRef.current.send({ image: localVideoRef.current });
-                    }
-                },
-                width: 640,
-                height: 480,
+    let data_aux = [];
+    
+    for (let i = 0; i < 2; i++) {
+        if (results.multiHandLandmarks && results.multiHandLandmarks[i]) {
+            results.multiHandLandmarks[i].forEach(lm => {
+                data_aux.push(lm.x);
+                data_aux.push(lm.y);
             });
-            camera.start();
-            aiCameraRef.current = camera;
+        } else {
+            for (let j = 0; j < 42; j++) data_aux.push(0);
         }
-    }, [selectedUser, currentUser]);
+    }
 
-    const stopAI = useCallback(() => {
-        if (aiCameraRef.current) {
-            aiCameraRef.current.stop();
-            aiCameraRef.current = null;
-        }
-        if (aiHandsRef.current) {
-            aiHandsRef.current.close();
-            aiHandsRef.current = null;
-        }
-    }, []);
+    if (data_aux.length === 84) {
+        try {
+            const res = await axios.post(`${AI_SERVER_URL}/predict`, 
+                { landmarks: data_aux },
+                { headers: { "ngrok-skip-browser-warning": "69420" } }
+            );
+            
+            const predictedWord = res.data.res;
 
-    const setCallStatusSafe = (status) => {
-        callStatusRef.current = status;
-        setCallStatus(status);
+            if (predictedWord && predictedWord !== "error" && predictedWord !== "...") {
+                
+                setLocalPrediction(predictedWord);
+
+                
+                socketService.emit('send_translation', {
+                    text: predictedWord,
+                    toUserId: selectedUser?._id,
+                    fromUserId: currentUser._id
+                });
+            }
+        } catch (err) {
+            console.error("❌ AI Prediction Error:", err);
+        }
+    }
+});
+
+        const detectFrame = async () => {
+            if (localVideoRef.current && localVideoRef.current.readyState >= 2) {
+                await hands.send({ image: localVideoRef.current });
+            }
+            requestRef.current = requestAnimationFrame(detectFrame);
+        };
+        detectFrame();
+    }, [currentUser._id, selectedUser?._id]);
+
+    // ==================== 2. WebRTC LOGIC ====================
+    const endCall = useCallback(() => {
+        cancelAnimationFrame(requestRef.current);
+        if (handsRef.current) handsRef.current.close();
+        if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
+        if (peerRef.current) peerRef.current.destroy();
+        
+        socketService.emit('end_call', { toUserId: selectedUser?._id, fromUserId: currentUser._id });
+        onClose();
+    }, [currentUser._id, selectedUser?._id, onClose]);
+
+    const setupMedia = async () => {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        streamRef.current = stream;
+        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+        return stream;
     };
 
-    const cleanup = useCallback(() => {
-        if (isEndingRef.current) return;
-        isEndingRef.current = true;
-        stopAI();
-        if (peerRef.current) {
-            peerRef.current.destroy();
-            peerRef.current = null;
-        }
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-            streamRef.current = null;
-        }
-    }, [stopAI]);
-
-    const endCall = useCallback(() => {
-        if (isEndingRef.current) return;
-        soundService.stopRingtone();
-        cleanup();
-        if (socketService.isConnected() && selectedUser) {
-            socketService.emit('end_call', {
+    const startCall = async () => {
+        setCallStatus('calling');
+        const stream = await setupMedia();
+        const peer = new Peer({ initiator: true, trickle: false, stream });
+        
+        peer.on('signal', (signal) => {
+            socketService.emit('call_user', {
                 fromUserId: currentUser._id,
-                toUserId: selectedUser._id
+                toUserId: selectedUser._id,
+                signal,
+                callerInfo: { name: currentUser.firstName }
             });
-        }
-        onClose();
-    }, [cleanup, currentUser, selectedUser, onClose]);
+        });
 
-    // ==================== SOCKET LISTENERS ====================
+        peer.on('stream', (remoteStream) => {
+            if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
+            setCallStatus('connected');
+            startAI();
+        });
+        peerRef.current = peer;
+    };
+
+    const acceptCall = async () => {
+        const stream = await setupMedia();
+        const peer = new Peer({ initiator: false, trickle: false, stream });
+        
+        peer.on('signal', (signal) => {
+            socketService.emit('accept_call', {
+                fromUserId: incomingCall.fromUserId,
+                toUserId: currentUser._id,
+                signal
+            });
+        });
+
+        peer.on('stream', (remoteStream) => {
+            if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
+            setCallStatus('connected');
+            startAI();
+        });
+
+        peer.signal(incomingCall.signal);
+        peerRef.current = peer;
+    };
+
     useEffect(() => {
-        // Receive remote peer's sign translation
+        // Listening lel translation mta3 s7ibek
         socketService.on('receive_translation', (data) => {
             setRemotePrediction(data.text);
         });
 
         socketService.on('call_accepted', (data) => {
-            if (peerRef.current && data.signal) {
-                peerRef.current.signal(data.signal);
-            }
-            setCallStatusSafe('connected');
+            if (peerRef.current) peerRef.current.signal(data.signal);
+            setCallStatus('connected');
             startAI();
         });
 
-        socketService.on('call_ended', () => {
-            endCall();
-        });
-
-        socketService.on('incoming_call', (data) => {
-            setIncomingCall(data);
-            setCallStatusSafe('ringing');
-        });
+        socketService.on('call_ended', () => onClose());
 
         return () => {
+            cancelAnimationFrame(requestRef.current);
+            if (handsRef.current) handsRef.current.close();
             socketService.off('receive_translation');
             socketService.off('call_accepted');
             socketService.off('call_ended');
-            socketService.off('incoming_call');
-            cleanup();
         };
-    }, [selectedUser, startAI, endCall, cleanup]);
+    }, [onClose, startAI]);
 
-    // ==================== CALL ACTIONS ====================
-    const startCall = async () => {
-        try {
-            setCallStatusSafe('calling');
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            streamRef.current = stream;
-            if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-
-            const peer = new Peer({ initiator: true, trickle: false, stream });
-
-            peer.on('signal', (signal) => {
-                socketService.emit('call_user', {
-                    fromUserId: currentUser._id,
-                    toUserId: selectedUser._id,
-                    signal,
-                    callerInfo: { name: `${currentUser.firstName} ${currentUser.lastName}` }
-                });
-            });
-
-            peer.on('stream', (remoteStream) => {
-                if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
-                setCallStatusSafe('connected');
-                startAI();
-            });
-
-            peer.on('error', (err) => {
-                console.error('Peer error:', err);
-                setError('Connection error. Please try again.');
-            });
-
-            peerRef.current = peer;
-        } catch (err) {
-            console.error('Failed to start call:', err);
-            setError('Could not access camera/microphone.');
-            setCallStatusSafe('idle');
-        }
-    };
-
-    const acceptCall = async () => {
-        try {
-            setCallStatusSafe('connecting');
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            streamRef.current = stream;
-            if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-
-            const peer = new Peer({ initiator: false, trickle: false, stream });
-
-            peer.on('signal', (signal) => {
-                socketService.emit('accept_call', {
-                    fromUserId: incomingCall.fromUserId,
-                    toUserId: currentUser._id,
-                    signal
-                });
-            });
-
-            peer.on('stream', (remoteStream) => {
-                if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
-                setCallStatusSafe('connected');
-                startAI();
-            });
-
-            peer.on('error', (err) => {
-                console.error('Peer error:', err);
-                setError('Connection error. Please try again.');
-            });
-
-            if (incomingCall?.signal) peer.signal(incomingCall.signal);
-            peerRef.current = peer;
-        } catch (err) {
-            console.error('Failed to accept call:', err);
-            setError('Could not access camera/microphone.');
-            setCallStatusSafe('idle');
-        }
-    };
-
-    const rejectCall = () => {
-        soundService.stopRingtone?.();
-        if (socketService.isConnected() && incomingCall) {
-            socketService.emit('reject_call', {
-                fromUserId: incomingCall.fromUserId,
-                toUserId: currentUser._id
-            });
-        }
-        onClose();
-    };
-
-    // ==================== RENDER ====================
     return (
         <div className="video-call-overlay">
             <div className="video-call-container">
-                {error && (
-                    <div className="call-error-banner">
-                        ⚠️ {error}
+                <div className="video-grid">
+                    <div className="video-box">
+                        <video ref={remoteVideoRef} autoPlay playsInline className="remote-video" />
+                        {remotePrediction && <div className="prediction-overlay peer-tag">{remotePrediction}</div>}
                     </div>
-                )}
-
-                <div className="video-container">
-                    <video ref={remoteVideoRef} autoPlay playsInline className="remote-video" />
-                    <video ref={localVideoRef} autoPlay playsInline muted className="local-video" />
-
-                    {/* Remote peer's sign language translation */}
-                    {remotePrediction && (
-                        <div className="ai-prediction-badge remote-prediction">
-                            🤟 Peer: <strong>{remotePrediction}</strong>
-                        </div>
-                    )}
-
-                    {/* Your own sign language translation */}
-                    {localPrediction && (
-                        <div className="ai-prediction-badge local-prediction">
-                            ✋ You: <strong>{localPrediction}</strong>
-                        </div>
-                    )}
+                    <div className="video-box local-small">
+                        <video ref={localVideoRef} autoPlay playsInline muted className="local-video" />
+                        {localPrediction && <div className="prediction-overlay my-tag">{localPrediction}</div>}
+                    </div>
                 </div>
-
-                <div className="call-controls">
-                    {callStatus === 'idle' && !incomingCall && (
-                        <button onClick={startCall} className="start-call-btn">
-                            📹 Start Video Call
-                        </button>
-                    )}
-
-                    {callStatus === 'ringing' && (
-                        <div className="ringing-buttons">
-                            <button onClick={acceptCall} className="accept-call-btn">✅ Accept</button>
-                            <button onClick={rejectCall} className="reject-call-btn">❌ Reject</button>
-                        </div>
-                    )}
-
-                    {callStatus === 'calling' && (
-                        <div className="calling-status">
-                            <span>📞 Calling...</span>
-                            <button onClick={endCall} className="end-call-btn">Cancel</button>
-                        </div>
-                    )}
-
-                    {callStatus === 'connected' && (
-                        <button onClick={endCall} className="end-call-btn">📵 End Call</button>
-                    )}
+                
+                <div className="controls-bar">
+                    {callStatus === 'idle' && <button onClick={startCall} className="btn-call">📹 Call</button>}
+                    {callStatus === 'ringing' && <button onClick={acceptCall} className="btn-accept">✅ Answer</button>}
+                    <button onClick={endCall} className="btn-end">🛑 End</button>
                 </div>
             </div>
         </div>
