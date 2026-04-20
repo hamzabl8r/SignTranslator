@@ -2,29 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import axios from 'axios';
 import { 
-  Users, 
-  LayoutDashboard, 
-  Trash2, 
-  UserPlus, 
-  ShieldAlert, 
-  UserCheck,
-  Search,
-  Filter,
-  Eye,
-  Ban,
-  Mail,
-  Phone,
-  Calendar,
-  Activity,
-  TrendingUp,
-  Award,
-  Clock,
-  Settings,
-  LogOut,
-  ChevronRight,
-  Download,
-  RefreshCw,
-  AlertCircle
+  Users, LayoutDashboard, Trash2, UserPlus, ShieldAlert, UserCheck,
+  Search, Filter, Eye, Mail, Phone, Calendar, Activity,
+  TrendingUp, Clock, LogOut,
+  Download, RefreshCw, AlertCircle
 } from 'lucide-react';
 import './Styles/AdminDashboard.css';
 
@@ -244,7 +225,9 @@ const AdminDashboard = () => {
           </div>
           <div className="admin-profile-info">
             <img 
-              src={`http://localhost:5000${user?.profilePic}` || '/default-avatar.png'} 
+              src={user?.profilePic 
+                                ? `https://backpfe-production.up.railway.app${user.profilePic}` 
+                                : "/default-avatar.png"} 
               alt="profile" 
               className="admin-avatar"
             />
@@ -479,7 +462,9 @@ const AdminDashboard = () => {
             <div className="modal-body">
               <div className="user-detail-avatar">
                 <img 
-                  src={`http://localhost:5000${selectedUser.profilePic}` || '/default-avatar.png'} 
+                  src={selectedUser?.profilePic 
+                                ? `https://backpfe-production.up.railway.app${selectedUser.profilePic}` 
+                                : "/default-avatar.png"} 
                   alt="profile" 
                 />
               </div>
