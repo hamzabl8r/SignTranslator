@@ -1,27 +1,279 @@
+/* ===== OVERLAY ===== */
 .video-call-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.95);
+    inset: 0;
+    background: rgba(0, 0, 0, 0.97);
     z-index: 10000;
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
 }
 
-.video-call-container {
+/* ===== MAIN LAYOUT: chat left + video right ===== */
+.video-call-layout {
+    display: flex;
     width: 100%;
     height: 100%;
-    position: relative;
-    background: #000;
 }
 
-.video-container {
+/* ===== LEFT CHAT PANEL ===== */
+.call-chat-panel {
+    display: flex;
+    flex-direction: column;
+    background: #0d0d12;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    transition: width 0.3s ease;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.call-chat-panel.open {
+    width: 320px;
+    min-width: 280px;
+}
+
+.call-chat-panel.closed {
+    width: 48px;
+    min-width: 48px;
+}
+
+/* Header */
+.call-chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    background: #111118;
+    gap: 10px;
+    min-height: 64px;
+}
+
+.call-chat-header-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+}
+
+.call-chat-header-info img {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #2ecc71;
+    flex-shrink: 0;
+}
+
+.call-chat-name {
+    display: block;
+    color: #f0f0f0;
+    font-weight: 600;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.call-chat-status {
+    display: block;
+    font-size: 0.72rem;
+    color: #888;
+    margin-top: 2px;
+}
+
+.toggle-chat-btn {
+    background: rgba(255,255,255,0.07);
+    border: none;
+    color: #aaa;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+
+.toggle-chat-btn:hover {
+    background: rgba(255,255,255,0.14);
+    color: #fff;
+}
+
+/* Messages */
+.call-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: #333 transparent;
+}
+
+.call-chat-messages::-webkit-scrollbar {
+    width: 4px;
+}
+.call-chat-messages::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 4px;
+}
+
+.call-chat-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #555;
+    text-align: center;
+    gap: 10px;
+}
+
+.call-chat-empty span {
+    font-size: 2.5rem;
+}
+
+.call-chat-empty p {
+    font-size: 0.8rem;
+    line-height: 1.5;
+    max-width: 200px;
+}
+
+/* Message bubbles */
+.call-chat-msg {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-width: 90%;
+}
+
+.call-chat-msg.local {
+    align-self: flex-end;
+    align-items: flex-end;
+}
+
+.call-chat-msg.remote {
+    align-self: flex-start;
+    align-items: flex-start;
+}
+
+.call-chat-bubble {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 16px;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.call-chat-msg.local .call-chat-bubble {
+    background: #1a5c38;
+    color: #e0ffe8;
+    border-bottom-right-radius: 4px;
+}
+
+.call-chat-msg.remote .call-chat-bubble {
+    background: #1e1e2e;
+    color: #e0e0f0;
+    border-bottom-left-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.sign-badge {
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.call-chat-text {
+    flex: 1;
+}
+
+.call-chat-time {
+    font-size: 0.65rem;
+    color: #555;
+    padding: 0 4px;
+}
+
+/* Input form */
+.call-chat-input-form {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    background: #111118;
+}
+
+.call-chat-input {
+    flex: 1;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    padding: 8px 14px;
+    color: #f0f0f0;
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.call-chat-input::placeholder {
+    color: #555;
+}
+
+.call-chat-input:focus {
+    border-color: #2ecc71;
+}
+
+.call-chat-send-btn {
+    background: #2ecc71;
+    border: none;
+    color: #000;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s, transform 0.15s;
+}
+
+.call-chat-send-btn:hover:not(:disabled) {
+    background: #27ae60;
+    transform: scale(1.08);
+}
+
+.call-chat-send-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ===== RIGHT VIDEO AREA ===== */
+.video-call-container {
+    flex: 1;
     position: relative;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+}
+
+.video-grid {
+    flex: 1;
+    position: relative;
+}
+
+.video-box {
     width: 100%;
     height: 100%;
+    position: relative;
 }
 
 .remote-video {
@@ -30,172 +282,160 @@
     object-fit: cover;
 }
 
-.local-video {
+.video-box.local-small {
     position: absolute;
-    bottom: 20px;
+    bottom: 90px;
     right: 20px;
     width: 200px;
     height: 150px;
-    border-radius: 10px;
+    border-radius: 12px;
+    overflow: hidden;
     border: 2px solid #2ecc71;
-    object-fit: cover;
-    cursor: pointer;
     z-index: 10;
 }
 
-.call-controls {
-    position: absolute;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 20;
-    background: rgba(0, 0, 0, 0.8);
-    padding: 15px 30px;
-    border-radius: 50px;
-    backdrop-filter: blur(10px);
+.local-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
-.start-call-btn {
-    background: #2ecc71;
-    color: white;
-    border: none;
-    padding: 12px 30px;
-    border-radius: 25px;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.start-call-btn:hover {
-    background: #27ae60;
-    transform: scale(1.05);
-}
-
-.end-call-btn {
-    background: #e74c3c;
-    color: white;
-    border: none;
-    padding: 12px 30px;
-    border-radius: 25px;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.end-call-btn:hover {
-    background: #c0392b;
-}
-
-.accept-call-btn {
-    background: #2ecc71;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 20px;
-    margin-right: 10px;
-    cursor: pointer;
-}
-
-.reject-call-btn {
-    background: #e74c3c;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 20px;
-    cursor: pointer;
-}
-
-.calling-status, .ringing-status, .connected-status {
-    text-align: center;
-    color: white;
-}
-
-.calling-status p, .ringing-status p, .connected-status p {
-    margin-bottom: 15px;
-    font-size: 1.1rem;
-}
-
-.spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid rgba(255,255,255,0.3);
-    border-top-color: #2ecc71;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 15px;
-}
+/* ===== PREDICTION OVERLAYS ===== */
 .prediction-overlay {
     position: absolute;
-    top: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.7);
-    color: #00ff00;
-    padding: 10px 20px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #00ff88;
+    padding: 8px 16px;
     border-radius: 20px;
-    font-weight: bold;
+    font-weight: 700;
+    font-size: 0.9rem;
     z-index: 100;
-}
-.peer-tag { border: 2px solid #00d2ff; }
-.my-tag { border: 2px solid #ff007f; top: unset; bottom: 10px; font-size: 0.8rem;}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
+    backdrop-filter: blur(6px);
+    letter-spacing: 0.5px;
 }
 
-.ringing-buttons {
+.peer-tag {
+    top: 16px;
+    left: 16px;
+    border: 2px solid #00d2ff;
+    color: #00d2ff;
+}
+
+.my-tag {
+    bottom: 14px;
+    left: 10px;
+    font-size: 0.75rem;
+    border: 2px solid #ff007f;
+    color: #ff007f;
+}
+
+/* ===== CONTROLS BAR ===== */
+.controls-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
     display: flex;
-    gap: 15px;
+    align-items: center;
     justify-content: center;
+    gap: 14px;
+    padding: 16px 24px;
+    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+    z-index: 20;
 }
 
-.video-call-btn {
+.btn-call {
     background: #2ecc71;
-    color: white;
+    color: #fff;
     border: none;
-    padding: 8px 15px;
-    border-radius: 20px;
+    padding: 12px 28px;
+    border-radius: 25px;
+    font-size: 1rem;
     cursor: pointer;
-    font-size: 1.2rem;
-    transition: all 0.3s;
-    margin-left: auto;
+    transition: all 0.2s;
 }
 
-.video-call-btn:hover {
-    background: #27ae60;
-    transform: scale(1.05);
+.btn-call:hover { background: #27ae60; transform: scale(1.05); }
+
+.btn-accept {
+    background: #2ecc71;
+    color: #fff;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 25px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
+.btn-accept:hover { background: #27ae60; transform: scale(1.05); }
+
+.btn-end {
+    background: #e74c3c;
+    color: #fff;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 25px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-end:hover { background: #c0392b; }
+
+.calling-label {
+    color: #aaa;
+    font-size: 0.9rem;
+}
+
+.btn-toggle-chat-mobile {
+    display: none;
+    background: rgba(255,255,255,0.12);
+    border: none;
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 25px;
+    font-size: 1.1rem;
+    cursor: pointer;
+}
+
+/* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
-    .local-video {
+    .video-call-layout {
+        flex-direction: column-reverse;
+    }
+
+    .call-chat-panel.open {
+        width: 100%;
+        height: 40%;
+        min-width: unset;
+        border-right: none;
+        border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .call-chat-panel.closed {
+        width: 100%;
+        height: 48px;
+        min-width: unset;
+    }
+
+    .video-box.local-small {
         width: 120px;
         height: 90px;
-        bottom: 10px;
+        bottom: 80px;
         right: 10px;
     }
-    
-    .call-controls {
-        padding: 10px 20px;
-    }
-}
-@media (max-width: 770px) {
-    .local-video {
-        width: 150px;
-        height: 110px;
-        bottom: 10px;
-        right: 10px;
-    }
-    .call-controls {
-        padding: 10px 20px;
-        width: 90%;
+
+    .btn-toggle-chat-mobile {
         display: flex;
-        justify-content: space-around;
+        align-items: center;
+        justify-content: center;
     }
 }
 
-@media (max-width: 550px) {
-    .start-call-btn, .end-call-btn {
-        padding: 10px 20px;
-        font-size: 0.9rem;
+@media (max-width: 480px) {
+    .btn-call, .btn-accept, .btn-end {
+        padding: 10px 18px;
+        font-size: 0.85rem;
     }
 }
