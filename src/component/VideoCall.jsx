@@ -5,6 +5,7 @@ import soundService from '../services/soundService';
 import { sendMessageSocket } from '../redux/Slice/messageSlice';
 import { Hands } from '@mediapipe/hands';
 import axios from 'axios';
+import toast from 'react-hot-toast'; // Ajout de l'import manquant
 import './Styles/VideoCall.css';
 
 const AI_SERVER_URL = 'https://zen-footing-depravity.ngrok-free.dev';
@@ -17,19 +18,26 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
     const [chatMessages, setChatMessages] = useState([]);
     const [chatInput, setChatInput] = useState('');
     const [isChatOpen, setIsChatOpen] = useState(true);
-    const [isAIActive, setIsAIActive] = useState(false); // AI activé manuellement
-    const [isCapturing, setIsCapturing] = useState(false); // Pour éviter les envois multiples
+    const [isAIActive, setIsAIActive] = useState(true); // Activé par défaut
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [aiStatus, setAiStatus] = useState("Initialisation...");
 
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
     const peerRef = useRef(null);
     const streamRef = useRef(null);
-    const requestRef = useRef(null);
+    const animationFrameRef = useRef(null);
     const handsRef = useRef(null);
-    const isHandsActiveRef = useRef(false);
-    const lastPredictionRef = useRef(""); // Pour éviter les répétitions
+    const lastPredictionRef = useRef("");
+    const lastPredictionTimeRef = useRef(0);
     const chatEndRef = useRef(null);
-    const detectionTimeoutRef = useRef(null); // Timeout pour la détection
+    const isMountedRef = useRef(true);
+    const isAIActiveRef = useRef(true);    // Fix: ref pour éviter les stale closures
+    const isProcessingRef = useRef(false); // Fix: ref pour éviter les stale closures
+
+    // Sync refs avec les states
+    useEffect(() => { isAIActiveRef.current = isAIActive; }, [isAIActive]);
+    useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
 
     // Scroll to bottom of chat
     const scrollChatToBottom = useCallback(() => {
@@ -41,25 +49,16 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
     }, [chatMessages, scrollChatToBottom]);
 
     // Clean up hands instance safely
-    const cleanupHands = useCallback(async () => {
-        // Cancel animation frame first
-        if (requestRef.current) {
-            cancelAnimationFrame(requestRef.current);
-            requestRef.current = null;
+    const cleanupHands = useCallback(() => {
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
         }
 
-        // Clear detection timeout
-        if (detectionTimeoutRef.current) {
-            clearTimeout(detectionTimeoutRef.current);
-            detectionTimeoutRef.current = null;
-        }
-
-        // Close and clean up hands instance
         if (handsRef.current) {
-            isHandsActiveRef.current = false;
             try {
                 handsRef.current.onResults = null;
-                await handsRef.current.close();
+                handsRef.current.close();
             } catch (error) {
                 console.warn('Error closing hands:', error);
             }
@@ -70,11 +69,15 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
     // Save message to DB
     const saveMessageToDB = useCallback((text, isLocal) => {
         if (!selectedUser?._id) return;
-        sendMessageSocket({
-            senderId: isLocal ? currentUser._id : selectedUser._id,
-            receiverId: isLocal ? selectedUser._id : currentUser._id,
-            text: `[Sign] ${text}`,
-        });
+        try {
+            sendMessageSocket({
+                senderId: isLocal ? currentUser._id : selectedUser._id,
+                receiverId: isLocal ? selectedUser._id : currentUser._id,
+                text: `[Sign Language] ${text}`,
+            });
+        } catch (error) {
+            console.error('Error saving message to DB:', error);
+        }
     }, [currentUser._id, selectedUser?._id]);
 
     // Add message to local chat
@@ -87,7 +90,9 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
             time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         };
         setChatMessages(prev => [...prev, msg]);
-        if (isSign) saveMessageToDB(text, isLocal);
+        if (isSign) {
+            saveMessageToDB(text, isLocal);
+        }
     }, [saveMessageToDB]);
 
     // Send text message manually
@@ -97,11 +102,15 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
 
         addChatMessage(chatInput.trim(), true, false);
 
-        sendMessageSocket({
-            senderId: currentUser._id,
-            receiverId: selectedUser?._id,
-            text: chatInput.trim(),
-        });
+        try {
+            sendMessageSocket({
+                senderId: currentUser._id,
+                receiverId: selectedUser?._id,
+                text: chatInput.trim(),
+            });
+        } catch (error) {
+            console.error('Error sending message:', error);
+        }
 
         socketService.emit('send_translation', {
             text: chatInput.trim(),
@@ -113,76 +122,100 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
         setChatInput('');
     };
 
-    // Toggle AI detection manually
-    const toggleAIDetection = useCallback(async () => {
-        if (isAIActive) {
-            // Désactiver l'AI
-            setIsAIActive(false);
-            setIsCapturing(false);
-            await cleanupHands();
-            setLocalPrediction("");
-            lastPredictionRef.current = "";
-        } else {
-            // Activer l'AI
-            setIsAIActive(true);
-            await startAI();
+    // Fonction pour envoyer la prédiction
+    const sendPrediction = useCallback(async (landmarks) => {
+        if (isProcessingRef.current) return;
+        
+        isProcessingRef.current = true;
+        setIsProcessing(true);
+        
+        try {
+            const res = await axios.post(`${AI_SERVER_URL}/predict`, 
+                { landmarks: landmarks },
+                { 
+                    headers: { 
+                        "ngrok-skip-browser-warning": "69420",
+                        "Content-Type": "application/json"
+                    },
+                    timeout: 5000
+                }
+            );
+
+            const predictedWord = res.data.res || res.data.prediction;
+
+            if (predictedWord && 
+                predictedWord !== "error" && 
+                predictedWord !== "..." &&
+                predictedWord !== "aucun" &&
+                predictedWord !== lastPredictionRef.current) {
+                
+                console.log('🎯 Prédiction:', predictedWord);
+                setLocalPrediction(predictedWord);
+                lastPredictionRef.current = predictedWord;
+                lastPredictionTimeRef.current = Date.now();
+                
+                addChatMessage(predictedWord, true, true);
+
+                socketService.emit('send_translation', {
+                    text: predictedWord,
+                    toUserId: selectedUser?._id,
+                    fromUserId: currentUser._id,
+                    isSign: true,
+                });
+
+                // Effacer la prédiction après 3 secondes
+                setTimeout(() => {
+                    if (lastPredictionRef.current === predictedWord) {
+                        setLocalPrediction("");
+                    }
+                }, 3000);
+            }
+        } catch (err) {
+            console.error("❌ Erreur API:", err.message);
+        } finally {
+            setTimeout(() => {
+                isProcessingRef.current = false;
+                setIsProcessing(false);
+            }, 1000);
         }
-    }, [isAIActive, cleanupHands]);
+    }, [addChatMessage, currentUser._id, selectedUser?._id]);
 
-    // AI Logic with manual activation
-    const startAI = useCallback(async () => {
-        // Clean up any existing hands instance first
-        if (handsRef.current) {
-            await cleanupHands();
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        if (!localVideoRef.current || !isAIActive) {
+    // Initialiser la détection des mains (correction du nom de la fonction)
+    const initHandDetection = useCallback(async () => {
+        if (!localVideoRef.current || !isMountedRef.current) {
+            setAiStatus("En attente de la caméra...");
             return;
         }
 
-        isHandsActiveRef.current = true;
+        setAiStatus("Initialisation du détecteur...");
+        
+        cleanupHands();
 
         try {
             const hands = new Hands({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
             });
+            
             handsRef.current = hands;
 
             hands.setOptions({
                 maxNumHands: 2,
                 modelComplexity: 1,
-                minDetectionConfidence: 0.7, // Augmenté pour plus de précision
-                minTrackingConfidence: 0.7,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5,
             });
 
             hands.onResults(async (results) => {
-                if (!isHandsActiveRef.current || !handsRef.current || !isAIActive) return;
+                if (!isMountedRef.current || !isAIActiveRef.current) return;
 
-                // Vérifier si des mains sont détectées
                 const hasHands = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
                 
-                if (!hasHands) {
-                    // Pas de main détectée, réinitialiser
-                    setIsCapturing(false);
-                    if (detectionTimeoutRef.current) {
-                        clearTimeout(detectionTimeoutRef.current);
-                        detectionTimeoutRef.current = null;
-                    }
-                    return;
-                }
-
-                // Si des mains sont détectées, attendre un court instant pour éviter les faux positifs
-                if (detectionTimeoutRef.current) {
-                    clearTimeout(detectionTimeoutRef.current);
-                }
-
-                detectionTimeoutRef.current = setTimeout(async () => {
-                    if (!isHandsActiveRef.current || !isAIActive) return;
-
+                if (hasHands) {
+                    setAiStatus("🖐️ Main détectée...");
+                    
+                    // Collecter les landmarks pour les deux mains
                     let data_aux = [];
-
+                    
                     for (let i = 0; i < 2; i++) {
                         if (results.multiHandLandmarks && results.multiHandLandmarks[i]) {
                             results.multiHandLandmarks[i].forEach(lm => {
@@ -193,101 +226,70 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                             for (let j = 0; j < 42; j++) data_aux.push(0);
                         }
                     }
-
-                    if (data_aux.length === 84 && !isCapturing) {
-                        setIsCapturing(true);
-                        
-                        try {
-                            const res = await axios.post(`${AI_SERVER_URL}/predict`,
-                                { landmarks: data_aux },
-                                { headers: { "ngrok-skip-browser-warning": "69420" } }
-                            );
-
-                            const predictedWord = res.data.res;
-
-                            if (predictedWord && 
-                                predictedWord !== "error" && 
-                                predictedWord !== "..." &&
-                                predictedWord !== lastPredictionRef.current) { // Éviter les répétitions
-                                
-                                setLocalPrediction(predictedWord);
-                                lastPredictionRef.current = predictedWord;
-                                
-                                addChatMessage(predictedWord, true, true);
-
-                                socketService.emit('send_translation', {
-                                    text: predictedWord,
-                                    toUserId: selectedUser?._id,
-                                    fromUserId: currentUser._id,
-                                    isSign: true,
-                                });
-
-                                // Effacer la prédiction après 2 secondes
-                                setTimeout(() => {
-                                    if (lastPredictionRef.current === predictedWord) {
-                                        setLocalPrediction("");
-                                    }
-                                }, 2000);
-                            }
-                        } catch (err) {
-                            console.error("AI Prediction Error:", err);
-                        } finally {
-                            setTimeout(() => {
-                                setIsCapturing(false);
-                            }, 500); // Délai avant la prochaine capture
-                        }
+                    
+                    if (data_aux.length === 84 && !isProcessingRef.current) {
+                        await sendPrediction(data_aux);
                     }
-                }, 300); // Attendre 300ms pour confirmer le geste
+                } else {
+                    setAiStatus("🤟 En attente de geste...");
+                }
             });
 
-            // Start detection loop
+            // Démarrer la boucle de détection
             const detectFrame = async () => {
-                if (!isHandsActiveRef.current || !handsRef.current || !localVideoRef.current || !isAIActive) {
+                if (!isMountedRef.current || !handsRef.current || !localVideoRef.current) {
                     return;
                 }
                 
                 try {
                     if (localVideoRef.current.readyState >= 2) {
-                        await hands.send({ image: localVideoRef.current });
+                        await handsRef.current.send({ image: localVideoRef.current });
                     }
                 } catch (error) {
-                    if (isHandsActiveRef.current) {
-                        console.error('Hand detection error:', error);
-                    }
+                    // Ignorer les erreurs normales
                 }
                 
-                if (isHandsActiveRef.current && isAIActive) {
-                    requestRef.current = requestAnimationFrame(detectFrame);
+                if (isMountedRef.current && isAIActiveRef.current) {
+                    animationFrameRef.current = requestAnimationFrame(detectFrame);
                 }
             };
             
             detectFrame();
+            setAiStatus("✅ Prêt - Faites des gestes!");
+            
         } catch (error) {
-            console.error('Failed to initialize MediaPipe Hands:', error);
-            isHandsActiveRef.current = false;
-            setIsAIActive(false);
+            console.error('Failed to initialize MediaPipe:', error);
+            setAiStatus("❌ Erreur d'initialisation");
         }
-    }, [addChatMessage, cleanupHands, currentUser._id, isAIActive, isCapturing, selectedUser?._id]);
+    }, [cleanupHands, sendPrediction]);
+
+    // Toggle AI detection
+    const toggleAIDetection = useCallback(() => {
+        const currentlyActive = isAIActiveRef.current;
+        isAIActiveRef.current = !currentlyActive;
+        setIsAIActive(!currentlyActive);
+        if (!currentlyActive) {
+            // On active
+            setAiStatus("Activation en cours...");
+            initHandDetection();
+        } else {
+            // On désactive
+            setAiStatus("Désactivé");
+            cleanupHands();
+        }
+    }, [initHandDetection, cleanupHands]);
 
     // End call with proper cleanup
-    const endCall = useCallback(async () => {
-        // Stop all detection and close hands first
-        setIsAIActive(false);
-        isHandsActiveRef.current = false;
+    const endCall = useCallback(() => {
+        isMountedRef.current = false;
         
-        if (requestRef.current) {
-            cancelAnimationFrame(requestRef.current);
-            requestRef.current = null;
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
         }
         
-        if (detectionTimeoutRef.current) {
-            clearTimeout(detectionTimeoutRef.current);
-            detectionTimeoutRef.current = null;
-        }
+        cleanupHands();
         
-        await cleanupHands();
-        
-        // Stop media tracks
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => {
                 track.stop();
@@ -296,13 +298,11 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
             streamRef.current = null;
         }
         
-        // Clean up peer connection
         if (peerRef.current) {
             peerRef.current.destroy();
             peerRef.current = null;
         }
         
-        // Clear video elements
         if (localVideoRef.current) {
             localVideoRef.current.srcObject = null;
         }
@@ -310,126 +310,154 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
             remoteVideoRef.current.srcObject = null;
         }
         
-        // Notify other party and close
         socketService.emit('end_call', { toUserId: selectedUser?._id, fromUserId: currentUser._id });
         onClose();
     }, [currentUser._id, selectedUser?._id, onClose, cleanupHands]);
 
     const setupMedia = async () => {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        streamRef.current = stream;
-        if (localVideoRef.current) {
-            localVideoRef.current.srcObject = stream;
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: true, 
+                audio: true 
+            });
+            streamRef.current = stream;
+            if (localVideoRef.current) {
+                localVideoRef.current.srcObject = stream;
+            }
+            return stream;
+        } catch (error) {
+            console.error('Error accessing media devices:', error);
+            toast.error('Impossible d\'accéder à la caméra/micro');
+            throw error;
         }
-        return stream;
     };
 
     const startCall = async () => {
         setCallStatus('calling');
-        const stream = await setupMedia();
-        const peer = new Peer({ initiator: true, trickle: false, stream });
+        try {
+            const stream = await setupMedia();
+            const peer = new Peer({ initiator: true, trickle: false, stream });
 
-        peer.on('signal', (signal) => {
-            socketService.emit('call_user', {
-                fromUserId: currentUser._id,
-                toUserId: selectedUser._id,
-                signal,
-                callerInfo: { name: currentUser.firstName }
+            peer.on('signal', (signal) => {
+                socketService.emit('call_user', {
+                    fromUserId: currentUser._id,
+                    toUserId: selectedUser._id,
+                    signal,
+                    callerInfo: { name: currentUser.firstName, profilePic: currentUser.profilePic }
+                });
             });
-        });
 
-        peer.on('stream', (remoteStream) => {
-            if (remoteVideoRef.current) {
-                remoteVideoRef.current.srcObject = remoteStream;
-            }
-            setCallStatus('connected');
-            // Ne pas démarrer AI automatiquement
-        });
+            peer.on('stream', (remoteStream) => {
+                if (remoteVideoRef.current) {
+                    remoteVideoRef.current.srcObject = remoteStream;
+                }
+                setCallStatus('connected');
+                // Démarrer la détection après la connexion
+                setTimeout(() => {
+                    if (isMountedRef.current) {
+                        initHandDetection();
+                    }
+                }, 1000);
+            });
 
-        peer.on('error', (err) => {
-            console.error('Peer error:', err);
-            endCall();
-        });
+            peer.on('error', (err) => {
+                console.error('Peer error:', err);
+                endCall();
+            });
 
-        peerRef.current = peer;
+            peerRef.current = peer;
+        } catch (error) {
+            console.error('Error starting call:', error);
+            setCallStatus('idle');
+        }
     };
 
     const acceptCall = async () => {
         if (!incomingCall) return;
         
-        const stream = await setupMedia();
-        const peer = new Peer({ initiator: false, trickle: false, stream });
+        try {
+            const stream = await setupMedia();
+            const peer = new Peer({ initiator: false, trickle: false, stream });
 
-        peer.on('signal', (signal) => {
-            socketService.emit('accept_call', {
-                fromUserId: incomingCall.fromUserId,
-                toUserId: currentUser._id,
-                signal
+            peer.on('signal', (signal) => {
+                socketService.emit('accept_call', {
+                    fromUserId: incomingCall.fromUserId,
+                    toUserId: currentUser._id,
+                    signal
+                });
             });
-        });
 
-        peer.on('stream', (remoteStream) => {
-            if (remoteVideoRef.current) {
-                remoteVideoRef.current.srcObject = remoteStream;
-            }
-            setCallStatus('connected');
-            // Ne pas démarrer AI automatiquement
-        });
+            peer.on('stream', (remoteStream) => {
+                if (remoteVideoRef.current) {
+                    remoteVideoRef.current.srcObject = remoteStream;
+                }
+                setCallStatus('connected');
+                setTimeout(() => {
+                    if (isMountedRef.current) {
+                        initHandDetection();
+                    }
+                }, 1000);
+            });
 
-        peer.on('error', (err) => {
-            console.error('Peer error:', err);
-            endCall();
-        });
+            peer.on('error', (err) => {
+                console.error('Peer error:', err);
+                endCall();
+            });
 
-        peer.signal(incomingCall.signal);
-        peerRef.current = peer;
-        setIncomingCall(null);
+            peer.signal(incomingCall.signal);
+            peerRef.current = peer;
+            setIncomingCall(null);
+        } catch (error) {
+            console.error('Error accepting call:', error);
+        }
     };
-
-    // Nettoyer quand le composant est démonté
-    useEffect(() => {
-        return () => {
-            setIsAIActive(false);
-            isHandsActiveRef.current = false;
-            if (requestRef.current) {
-                cancelAnimationFrame(requestRef.current);
-            }
-            if (detectionTimeoutRef.current) {
-                clearTimeout(detectionTimeoutRef.current);
-            }
-            cleanupHands();
-        };
-    }, [cleanupHands]);
 
     // Socket listeners
     useEffect(() => {
-        socketService.on('receive_translation', (data) => {
+        const handleReceiveTranslation = (data) => {
+            console.log('📨 Translation reçue:', data);
             setRemotePrediction(data.text);
             addChatMessage(data.text, false, data.isSign ?? true);
             
-            // Effacer la prédiction après 2 secondes
             setTimeout(() => {
                 setRemotePrediction("");
-            }, 2000);
-        });
+            }, 3000);
+        };
 
-        socketService.on('call_accepted', (data) => {
+        const handleCallAccepted = (data) => {
             if (peerRef.current) {
                 peerRef.current.signal(data.signal);
             }
             setCallStatus('connected');
-        });
+        };
 
-        socketService.on('call_ended', () => {
+        const handleCallEnded = () => {
             endCall();
-        });
+        };
+
+        socketService.on('receive_translation', handleReceiveTranslation);
+        socketService.on('call_accepted', handleCallAccepted);
+        socketService.on('call_ended', handleCallEnded);
 
         return () => {
-            socketService.off('receive_translation');
-            socketService.off('call_accepted');
-            socketService.off('call_ended');
+            socketService.off('receive_translation', handleReceiveTranslation);
+            socketService.off('call_accepted', handleCallAccepted);
+            socketService.off('call_ended', handleCallEnded);
         };
     }, [addChatMessage, endCall]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        isMountedRef.current = true;
+        
+        return () => {
+            isMountedRef.current = false;
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+            cleanupHands();
+        };
+    }, [cleanupHands]);
 
     return (
         <div className="video-call-overlay">
@@ -448,11 +476,11 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                             <div>
                                 <span className="call-chat-name">{selectedUser?.firstName} {selectedUser?.lastName}</span>
                                 <span className="call-chat-status">
-                                    {callStatus === 'connected' ? '🟢 Connected' : callStatus === 'calling' ? '⏳ Calling...' : callStatus === 'ringing' ? '📞 Ringing' : '⚪ Idle'}
+                                    {callStatus === 'connected' ? '🟢 Connecté' : callStatus === 'calling' ? '⏳ Appel...' : callStatus === 'ringing' ? '📞 Sonnerie' : '⚪ Inactif'}
                                 </span>
                             </div>
                         </div>
-                        <button className="toggle-chat-btn" onClick={() => setIsChatOpen(v => !v)} title="Toggle chat">
+                        <button className="toggle-chat-btn" onClick={() => setIsChatOpen(v => !v)} title="Chat">
                             {isChatOpen ? '◀' : '▶'}
                         </button>
                     </div>
@@ -464,8 +492,11 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                                     <div className="call-chat-empty">
                                         <span>🤟</span>
                                         <p>Les traductions gestuelles et messages apparaîtront ici</p>
-                                        <p style={{ fontSize: '0.7rem', marginTop: '5px' }}>
-                                            {isAIActive ? '🟢 Reconnaissance active' : '⚪ Reconnaissance désactivée'}
+                                        <p style={{ fontSize: '0.7rem', marginTop: '5px', color: isAIActive ? '#2ecc71' : '#e74c3c' }}>
+                                            {isAIActive ? '🟢 Traduction active' : '⚪ Traduction désactivée'}
+                                        </p>
+                                        <p style={{ fontSize: '0.65rem', marginTop: '5px', color: '#888' }}>
+                                            {aiStatus}
                                         </p>
                                     </div>
                                 )}
@@ -507,32 +538,38 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                         <div className="video-box">
                             <video ref={remoteVideoRef} autoPlay playsInline className="remote-video" />
                             {remotePrediction && (
-                                <div className="prediction-overlay peer-tag">🤟 {remotePrediction}</div>
+                                <div className="prediction-overlay peer-tag">
+                                    🤟 {remotePrediction}
+                                </div>
                             )}
                         </div>
                         <div className="video-box local-small">
                             <video ref={localVideoRef} autoPlay playsInline muted className="local-video" />
                             {localPrediction && (
-                                <div className="prediction-overlay my-tag">🤟 {localPrediction}</div>
+                                <div className="prediction-overlay my-tag">
+                                    🤟 {localPrediction}
+                                </div>
                             )}
-                            {/* Bouton pour activer/désactiver l'AI */}
+                            {/* AI Toggle Button */}
                             <button
                                 onClick={toggleAIDetection}
                                 style={{
                                     position: 'absolute',
-                                    bottom: '-30px',
+                                    bottom: '-35px',
                                     left: '10px',
                                     background: isAIActive ? '#2ecc71' : '#e74c3c',
                                     border: 'none',
                                     color: 'white',
-                                    padding: '4px 8px',
-                                    borderRadius: '4px',
+                                    padding: '4px 10px',
+                                    borderRadius: '20px',
                                     cursor: 'pointer',
                                     fontSize: '10px',
-                                    zIndex: 20
+                                    fontWeight: 'bold',
+                                    zIndex: 20,
+                                    transition: 'all 0.2s'
                                 }}
                             >
-                                {isAIActive ? '🔴 Désactiver AI' : '🟢 Activer AI'}
+                                {isAIActive ? '🔴 Désactiver Traduction' : '🟢 Activer Traduction'}
                             </button>
                         </div>
                     </div>
@@ -546,6 +583,11 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                         )}
                         {callStatus === 'calling' && (
                             <span className="calling-label">⏳ En attente...</span>
+                        )}
+                        {callStatus === 'connected' && (
+                            <span className="calling-label" style={{ fontSize: '11px', color: '#2ecc71' }}>
+                                {aiStatus}
+                            </span>
                         )}
                         <button
                             className="btn-toggle-chat-mobile"
