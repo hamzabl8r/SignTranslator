@@ -2,10 +2,8 @@ import React, { useEffect, useState } from 'react';
 import './App.css';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { userCurrent } from './redux/Slice/userSlice'; 
+import { userCurrent } from './redux/Slice/userSlice';
 import { Toaster } from 'react-hot-toast';
-
-// Components
 import Translator from './component/Translator';
 import History from './component/History';
 import Home from './component/Home';
@@ -16,29 +14,26 @@ import ForgotPassword from './component/ForgotPassword';
 import ResetPassword from './component/ResetPassword';
 import ProtectedRoute from './component/ProtectedRoute';
 import Chat from './component/Chat';
-
+import AdminDashboard from './component/AdminDashboard';
 import process from 'process';
 import { Buffer } from 'buffer';
-import AdminDashboard from './component/AdminDashboard';
 
 window.process = process;
 window.Buffer = Buffer;
 
 const App = () => {
   const dispatch = useDispatch();
-  const { status, user } = useSelector((state) => state.user);
+  const { user } = useSelector((state) => state.user);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem('token');
     if (token) {
       dispatch(userCurrent())
         .unwrap()
-        .then(() => {
-          setIsLoading(false);
-        })
+        .then(() => setIsLoading(false))
         .catch(() => {
-          localStorage.removeItem("token");
+          localStorage.removeItem('token');
           setIsLoading(false);
         });
     } else {
@@ -48,74 +43,40 @@ const App = () => {
 
   if (isLoading) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#0F172A',
-        color: 'white'
-      }}>
-        <div>Loading...</div>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <div className="spinner"></div>
       </div>
     );
   }
 
   return (
-    <>
-      <Toaster 
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            background: '#242731',
-            color: '#fff',
-            borderRadius: '10px',
-          },
-          success: {
-            iconTheme: {
-              primary: '#2ecc71',
-              secondary: '#fff',
-            },
-          },
-          error: {
-            iconTheme: {
-              primary: '#e74c3c',
-              secondary: '#fff',
-            },
-          },
-        }}
-      />
-      <BrowserRouter>
-        <div className="app-container">
-          <Header />
-          <main className="content">
-            <Routes>
-              {/* Routes publiques */}
-              <Route path="/" element={<Home />} />
-              <Route path="/history" element={<History />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password/:token" element={<ResetPassword />} />
-              <Route path="/translator" element={<Translator />} />
-              <Route path="/login" element={<Auth />} />
-              <Route path="/dictionary" element={<div>Dictionary Page (Coming Soon)</div>} />
-              
-              {/* Routes protégées */}
-              <Route element={<ProtectedRoute />}>
-                <Route path="/profil" element={<Profil />} />
-                <Route path="/chat" element={<Chat />}/> 
-                  <Route 
-                    path="/admin" 
-                    element={user?.isAdmin ? <AdminDashboard /> : <Navigate to="/" />} 
-                  />
-              </Route>
-              
-              <Route path="*" element={<h1>404: Page Not Found</h1>} /> 
-            </Routes>
-          </main>
-        </div>
-      </BrowserRouter>
-    </>
+    <BrowserRouter 
+    future={{
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+    }}>
+    
+      <Toaster position="top-right" />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Auth />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
+
+        <Route element={<ProtectedRoute />}>
+          <Route path="/translator" element={<><Header /><Translator /></>} />
+          <Route path="/history" element={<><Header /><History /></>} />
+          <Route path="/profil" element={<><Header /><Profil /></>} />
+          <Route path="/admin" element={<><Header /><AdminDashboard /></>} />
+
+        
+          <Route path="/chat" element={<><Header /><Chat /></>} />
+          <Route path="/chat/:userId" element={<><Header /><Chat /></>} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </BrowserRouter>
   );
 };
 

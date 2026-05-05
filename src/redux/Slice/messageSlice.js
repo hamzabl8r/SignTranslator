@@ -2,7 +2,7 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 import socketService from '../../services/socketService';
 
-const API_URL = "https://backpfe-production.up.railway.app/api/messages";
+const API_URL = "https://backpfe-production-789f.up.railway.app/api/messages";
 
 export const initializeSocket = (userId) => {
     if (userId) {

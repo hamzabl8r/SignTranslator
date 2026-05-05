@@ -1,7 +1,7 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = "https://backpfe-production.up.railway.app";
+const API_URL = "https://backpfe-production-789f.up.railway.app";
 
 // --- Actions (Async Thunks) ---
 

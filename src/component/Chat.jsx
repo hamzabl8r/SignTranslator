@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { 
-    getConversations, 
-    getMessages, 
-    getAllUsers,
-    setCurrentConversation,
-    addMessage,
-    initializeSocket,
-    disconnectSocket,
-    sendMessageSocket,
-    markReadSocket,
-    markMessageRead
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  getConversations,
+  getMessages,
+  getAllUsers,
+  setCurrentConversation,
+  addMessage,
+  initializeSocket,
+  sendMessageSocket,
+  markReadSocket,
+  markMessageRead,
 } from '../redux/Slice/messageSlice';
 import toast from 'react-hot-toast';
 import VideoCall from './VideoCall';
@@ -19,357 +19,326 @@ import soundService from '../services/soundService';
 import './Styles/Chat.css';
 
 const Chat = () => {
-    const [messageText, setMessageText] = useState('');
-    const [selectedUser, setSelectedUser] = useState(null);
-    const [showUserList, setShowUserList] = useState(false);
-    const [showVideoCall, setShowVideoCall] = useState(false);
-    const [pendingIncomingCall, setPendingIncomingCall] = useState(null);
-    
-    const dispatch = useDispatch();
-    const { user: currentUser } = useSelector((state) => state.user);
-    const { conversations, messages, users, sending } = useSelector((state) => state.message);
-    
-    const messagesEndRef = useRef(null);
-    const socketRef = useRef(null);
+  const { userId } = useParams();          // ← reads /chat/:userId
+  const navigate = useNavigate();
 
-    // Initialiser Socket.IO
-    useEffect(() => {
-        if (currentUser?._id) {
-            console.log('🔌 Initializing socket for chat...');
-            const socket = initializeSocket(currentUser._id);
-            socketRef.current = socket;
-            
-            if (socket) {
-                socketService.on('registered', (data) => {
-                    console.log('✅ Socket registered:', data);
-                });
-                
-                socketService.on('new_message', (message) => {
-                    console.log('New message received:', message);
-                    dispatch(addMessage(message));
-                    dispatch(getConversations());
-                    soundService.playMessageReceived(); 
-                    toast.success(`New message from ${message.sender?.firstName || 'Unknown'}`);
-                });
-                
-                socketService.on('message_sent', (message) => {
-                    console.log('Message sent:', message);
-                    dispatch(addMessage(message));
-                    soundService.playMessageSent();
-                });
-                
-                socketService.on('messages_read', (data) => {
-                    console.log('Messages read:', data);
-                    if (selectedUser?._id === data.userId) {
-                        dispatch(markMessageRead({ conversationId: data.conversationId }));
-                    }
-                });
+  const [messageText, setMessageText] = useState('');
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [showUserList, setShowUserList] = useState(false);
+  const [showVideoCall, setShowVideoCall] = useState(false);
+  const [pendingIncomingCall, setPendingIncomingCall] = useState(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth <= 768
+  );
 
-                
-                socketService.on('incoming_call', (data) => {
-                    console.log('📞 INCOMING CALL received in Chat.jsx:', data);
-                    
-                    if (data.fromUserId !== currentUser._id) {
-                        setPendingIncomingCall(data);
-                        setShowVideoCall(true);
-                        soundService.startRingtone(); 
+  const dispatch = useDispatch();
+  const { user: currentUser } = useSelector((state) => state.user);
+  const { conversations, messages, users, sending } = useSelector((state) => state.message);
 
-                        // Show a toast notification as backup
-                        toast(` Incoming call from ${data.callerInfo?.name || 'Someone'}`, {
-                            duration: 10000,
-                            icon: '📞',
-                        });
+  const messagesEndRef = useRef(null);
+  const isMobile = () => window.innerWidth <= 768;
 
-                        // Request notification permission and show browser notification
-                        if ('Notification' in window) {
-                            if (Notification.permission === 'granted') {
-                                new Notification('📞 Incoming Video Call', {
-                                    body: `${data.callerInfo?.name || 'Someone'} is calling you...`,
-                                    icon: data.callerInfo?.profilePic || '/default-avatar.png',
-                                });
-                            } else if (Notification.permission !== 'denied') {
-                                Notification.requestPermission().then(permission => {
-                                    if (permission === 'granted') {
-                                        new Notification('📞 Incoming Video Call', {
-                                            body: `${data.callerInfo?.name || 'Someone'} is calling you...`,
-                                        });
-                                    }
-                                });
-                            }
-                        }
-                    }
-                });
-            }
-            
-            return () => {
-                socketService.off('registered');
-                socketService.off('new_message');
-                socketService.off('message_sent');
-                socketService.off('messages_read');
-                socketService.off('incoming_call'); 
-            };
-        }
-    }, [currentUser, dispatch, selectedUser]);
+  const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
+  const closeSidebar = () => setIsSidebarOpen(false);
 
-    // Charger les conversations et utilisateurs
-    useEffect(() => {
-        if (currentUser) {
-            dispatch(getConversations());
-            dispatch(getAllUsers());
-        }
-    }, [dispatch, currentUser]);
+  // Select user + update URL
+  const handleUserSelect = (user) => {
+    if (!user?._id) return;
+    setSelectedUser(user);
+    setShowUserList(false);
+    closeSidebar();
+    navigate(`/chat/${user._id}`, { replace: true });
+  };
 
-    useEffect(() => {
-        if (selectedUser) {
-            const existingConv = conversations?.find(
-                conv => conv.participant?._id === selectedUser._id
-            );
-            if (existingConv) {
-                dispatch(setCurrentConversation(existingConv));
-                dispatch(getMessages(existingConv._id));
-                if (socketService.isConnected()) {
-                    markReadSocket({ 
-                        conversationId: existingConv._id, 
-                        userId: currentUser?._id 
-                    });
-                }
-            } else {
-                dispatch(setCurrentConversation({ participant: selectedUser }));
-            }
-        }
-    }, [selectedUser, conversations, dispatch, currentUser]);
+  // Deselect → back to /chat
+  const handleBack = () => {
+    setSelectedUser(null);
+    navigate('/chat', { replace: true });
+  };
 
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
+  const handleStartVideoCall = () => {
+    if (!selectedUser) { toast.error('Please select a user first'); return; }
+    setPendingIncomingCall(null);
+    setShowVideoCall(true);
+  };
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
-
-    const handleSendMessage = (e) => {
-        e.preventDefault();
-        if (!messageText.trim()) {
-            toast.error("Please enter a message");
-            return;
-        }
-        if (!selectedUser) {
-            toast.error("Please select a user to chat with");
-            return;
-        }
-
-        sendMessageSocket({
-            senderId: currentUser._id,
-            receiverId: selectedUser._id,
-            text: messageText
-        });
-        
-        setMessageText('');
-        scrollToBottom();
-    };
-
-    const handleUserSelect = (user) => {
-        setSelectedUser(user);
-        setShowUserList(false);
-    };
-
-    const formatTime = (date) => {
-        if (!date) return '';
-        return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    };
-
-    const handleVideoCallClose = () => {
-        setShowVideoCall(false);
-        setPendingIncomingCall(null);
-        soundService.stopRingtone(); 
-    };
-
-    if (!currentUser) {
-        return (
-            <div className="chat-container">
-                <div className="loading-container">
-                    <div className="spinner"></div>
-                    <p>Loading...</p>
-                </div>
-            </div>
-        );
+  // ✅ Auto-select user from URL param once users are loaded
+  useEffect(() => {
+    if (!userId || !users?.length) return;
+    const userFromUrl = users.find((u) => u._id === userId);
+    if (userFromUrl && userFromUrl._id !== selectedUser?._id) {
+      setSelectedUser(userFromUrl);
+      if (isMobile()) setIsSidebarOpen(false);
     }
+  }, [userId, users]);
 
-    return (
-        <>
-            <div className="chat-container">
-                <div className="chat-sidebar">
-                    <div className="sidebar-header">
-                        <h3>Messages</h3>
-                        <button 
-                            className="new-chat-btn"
-                            onClick={() => setShowUserList(!showUserList)}
-                        >
-                            New Chat
-                        </button>
-                    </div>
+  // Also check conversations if user not in users list
+  useEffect(() => {
+    if (!userId || !conversations?.length || selectedUser) return;
+    const conv = conversations.find((c) => c.participant?._id === userId);
+    if (conv?.participant) {
+      setSelectedUser(conv.participant);
+      if (isMobile()) setIsSidebarOpen(false);
+    }
+  }, [userId, conversations]);
 
-                    {showUserList && (
-                        <div className="user-list">
-                            <h4>Select a user to chat with</h4>
-                            {users && users.length > 0 ? (
-                                users.filter(u => u._id !== currentUser._id).map(user => (
-                                    <div 
-                                        key={user._id}
-                                        className="user-item"
-                                        onClick={() => handleUserSelect(user)}
-                                    >
-                                        <img 
-                                            src={user.profilePic ? `https://backpfe-production.up.railway.app${user.profilePic}` : "/default-avatar.png"}
-                                            alt={user.firstName}
-                                            onError={(e) => { e.target.src = "/default-avatar.png"; }}
-                                        />
-                                        <div className="user-info">
-                                            <span className="user-name">{user.firstName} {user.lastName}</span>
-                                            <span className="user-email">{user.email}</span>
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="no-users">
-                                    <p>No other users found.</p>
-                                </div>
-                            )}
-                        </div>
-                    )}
+  // Auto-open sidebar on mobile when no conversation selected
+  useEffect(() => {
+    if (isMobile() && !selectedUser) setIsSidebarOpen(true);
+    if (isMobile() && selectedUser) setIsSidebarOpen(false);
+  }, [selectedUser]);
 
-                    <div className="conversations-list">
-                        <h4>Recent Chats</h4>
-                        {conversations && conversations.length > 0 ? (
-                            conversations.map(conv => (
-                                <div 
-                                    key={conv._id}
-                                    className={`conversation-item ${selectedUser?._id === conv.participant?._id ? 'active' : ''}`}
-                                    onClick={() => handleUserSelect(conv.participant)}
-                                >
-                                    <img 
-                                        src={conv.participant?.profilePic ? `https://backpfe-production.up.railway.app${conv.participant.profilePic}` : "/default-avatar.png"}
-                                        alt={conv.participant?.firstName}
-                                        onError={(e) => { e.target.src = "/default-avatar.png"; }}
-                                    />
-                                    <div className="conversation-info">
-                                        <div className="conversation-name">
-                                            {conv.participant?.firstName} {conv.participant?.lastName}
-                                        </div>
-                                        <div className="last-message">{conv.lastMessage || "No messages yet"}</div>
-                                    </div>
-                                    <div className="conversation-meta">
-                                        <div className="message-time">
-                                            {formatTime(conv.lastMessageTime)}
-                                        </div>
-                                        {conv.unreadCount > 0 && (
-                                            <div className="unread-badge">{conv.unreadCount}</div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="no-conversations">
-                                <p>No conversations yet</p>
-                                <p>Click "New Chat" to start messaging</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (!isMobile()) setIsSidebarOpen(false);
+      else if (!selectedUser) setIsSidebarOpen(true);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [selectedUser]);
 
-                <div className="chat-area">
-                    {selectedUser ? (
-                        <>
-                            <div className="chat-header">
-                                <img 
-                                    src={selectedUser.profilePic ? `https://backpfe-production.up.railway.app${selectedUser.profilePic}` : "/default-avatar.png"}
-                                    alt={selectedUser.firstName}
-                                    onError={(e) => { e.target.src = "/default-avatar.png"; }}
-                                />
-                                <div className="chat-header-info">
-                                    <h3>{selectedUser.firstName} {selectedUser.lastName}</h3>
-                                    <span>{selectedUser.email}</span>
-                                </div>
-                                <button 
-                                    onClick={() => setShowVideoCall(true)} 
-                                    className="video-call-btn"
-                                    title="Video Call"
-                                >
-                                    📹
-                                </button>
-                            </div>
+  // Socket initialization
+  useEffect(() => {
+    if (!currentUser?._id) return;
+    initializeSocket(currentUser._id);
 
-                            <div className="messages-container">
-                                {messages && messages.length === 0 ? (
-                                    <div className="no-messages">
-                                        <p>No messages yet. Start a conversation!</p>
-                                    </div>
-                                ) : (
-                                    messages && messages.map((msg, index) => (
-                                        <div 
-                                            key={msg._id || index}
-                                            className={`message ${msg.sender?._id === currentUser?._id ? 'sent' : 'received'}`}
-                                        >
-                                            {msg.sender?._id !== currentUser?._id && (
-                                                <img 
-                                                    src={msg.sender?.profilePic ? `https://backpfe-production.up.railway.app${msg.sender.profilePic}` : "/default-avatar.png"}
-                                                    alt={msg.sender?.firstName}
-                                                    className="message-avatar"
-                                                    onError={(e) => { e.target.src = "/default-avatar.png"; }}
-                                                />
-                                            )}
-                                            <div className="message-content">
-                                                <div className="message-text">{msg.text}</div>
-                                                <div className="message-time">
-                                                    {formatTime(msg.createdAt)}
-                                                    {msg.sender?._id === currentUser?._id && (
-                                                        <span className="message-status">
-                                                            {msg.read ? '✓✓' : '✓'}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                                <div ref={messagesEndRef} />
-                            </div>
+    const handleNewMessage = (message) => {
+      dispatch(addMessage(message));
+      dispatch(getConversations());
+      soundService.playMessageReceived();
+      toast.success(`New message from ${message.sender?.firstName || 'Unknown'}`);
+    };
+    const handleMessageSent = (message) => {
+      dispatch(addMessage(message));
+      soundService.playMessageSent();
+    };
+    const handleMessagesRead = (data) => {
+      if (selectedUser?._id === data.userId) {
+        dispatch(markMessageRead({ conversationId: data.conversationId }));
+      }
+    };
+    const handleIncomingCall = (data) => {
+      if (data.fromUserId !== currentUser._id) {
+        setPendingIncomingCall(data);
+        setShowVideoCall(true);
+        soundService.startRingtone();
+        toast(`📞 Incoming call from ${data.callerInfo?.name || 'Someone'}`, {
+          duration: 10000, icon: '📞',
+        });
+      }
+    };
 
-                            <form className="message-input-form" onSubmit={handleSendMessage}>
-                                <input
-                                    type="text"
-                                    placeholder="Type a message..."
-                                    value={messageText}
-                                    onChange={(e) => setMessageText(e.target.value)}
-                                    disabled={sending}
-                                />
-                                <button type="submit" disabled={sending || !messageText.trim()}>
-                                    {sending ? 'Sending...' : 'Send'}
-                                </button>
-                            </form>
-                        </>
-                    ) : (
-                        <div className="no-chat-selected">
-                            <div className="no-chat-content">
-                                <div className="chat-icon">💬</div>
-                                <h3>Welcome to Messages!</h3>
-                                <p>Select a conversation from the sidebar or click "New Chat" to start messaging</p>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
+    socketService.on('new_message', handleNewMessage);
+    socketService.on('message_sent', handleMessageSent);
+    socketService.on('messages_read', handleMessagesRead);
+    socketService.on('incoming_call', handleIncomingCall);
 
-            {showVideoCall && (
-                <VideoCall
-                    currentUser={currentUser}
-                    selectedUser={selectedUser}
-                    initialIncomingCall={pendingIncomingCall}
-                    onClose={handleVideoCallClose}
-                />
-            )}
-        </>
+    return () => {
+      socketService.off('new_message', handleNewMessage);
+      socketService.off('message_sent', handleMessageSent);
+      socketService.off('messages_read', handleMessagesRead);
+      socketService.off('incoming_call', handleIncomingCall);
+    };
+  }, [currentUser, dispatch, selectedUser]);
+
+  // Load conversations and users
+  useEffect(() => {
+    if (currentUser) {
+      dispatch(getConversations());
+      dispatch(getAllUsers());
+    }
+  }, [dispatch, currentUser]);
+
+  // Load messages when user is selected
+  useEffect(() => {
+    if (!selectedUser) return;
+    const existingConv = conversations?.find(
+      (conv) => conv.participant?._id === selectedUser._id
     );
+    if (existingConv) {
+      dispatch(setCurrentConversation(existingConv));
+      dispatch(getMessages(existingConv._id));
+      if (socketService.isConnected()) {
+        markReadSocket({ conversationId: existingConv._id, userId: currentUser?._id });
+      }
+    } else {
+      dispatch(setCurrentConversation({ participant: selectedUser }));
+    }
+  }, [selectedUser, conversations, dispatch, currentUser]);
+
+  // Scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    if (!messageText.trim()) { toast.error('Please enter a message'); return; }
+    if (!selectedUser) { toast.error('Please select a user to chat with'); return; }
+    sendMessageSocket({ senderId: currentUser._id, receiverId: selectedUser._id, text: messageText });
+    setMessageText('');
+  };
+
+  const formatTime = (date) => {
+    if (!date) return '';
+    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+  const getImageUrl = (path) =>
+    path ? `https://backpfe-production.up.railway.app${path}` : '/default-avatar.png';
+  const getLastMessage = (conv) => conv?.lastMessage?.text || 'No messages yet';
+  const getLastMessageTime = (conv) => formatTime(conv?.lastMessage?.createdAt);
+  const filteredUsers = users?.filter((u) => u._id !== currentUser?._id) || [];
+
+  if (!currentUser) {
+    return <div className="loading-container"><div className="spinner"></div></div>;
+  }
+
+  return (
+    <>
+      <div className="chat-container">
+        <button className="menu-btn" onClick={toggleSidebar} aria-label="Open sidebar">☰</button>
+
+        {isSidebarOpen && <div className="sidebar-overlay" onClick={closeSidebar}></div>}
+
+        <aside className={`chat-sidebar ${isSidebarOpen ? 'open' : ''}`}>
+          <div className="sidebar-header">
+            <h3>Messages</h3>
+            <button className="new-chat-btn" onClick={() => setShowUserList((p) => !p)}>
+              New Chat
+            </button>
+            <button className="close-sidebar-btn" onClick={closeSidebar} aria-label="Close">✕</button>
+          </div>
+
+          {showUserList && (
+            <div className="user-list">
+              {filteredUsers.length > 0 ? (
+                filteredUsers.map((user) => (
+                  <div key={user._id} className="user-item" onClick={() => handleUserSelect(user)}>
+                    <img src={getImageUrl(user.profilePicture)} alt={user.firstName} width="44" height="44" />
+                    <div><strong>{user.firstName} {user.lastName}</strong></div>
+                  </div>
+                ))
+              ) : (
+                <p style={{ padding: '12px', color: 'var(--text-dim)' }}>No other users found.</p>
+              )}
+            </div>
+          )}
+
+          <div className="conversations-list">
+            {conversations?.length > 0 ? (
+              conversations.map((conversation) => (
+                <div
+                  key={conversation._id}
+                  className={`conversation-item ${
+                    selectedUser?._id === conversation.participant?._id ? 'active' : ''
+                  }`}
+                  onClick={() => handleUserSelect(conversation.participant)}
+                >
+                  <img
+                    src={getImageUrl(conversation.participant?.profilePicture)}
+                    alt={conversation.participant?.firstName}
+                    width="48" height="48"
+                  />
+                  <div className="conversation-content">
+                    <div className="conversation-name">
+                      <strong>{conversation.participant?.firstName} {conversation.participant?.lastName}</strong>
+                    </div>
+                    <div className="conversation-last-message">{getLastMessage(conversation)}</div>
+                  </div>
+                  <small className="conversation-time">{getLastMessageTime(conversation)}</small>
+                </div>
+              ))
+            ) : (
+              <div className="empty-sidebar-state">
+                <p>No conversations yet</p>
+                <p>Click "New Chat" to start messaging</p>
+              </div>
+            )}
+          </div>
+        </aside>
+
+        <section className="chat-area">
+          {selectedUser ? (
+            <>
+              <div className="chat-header">
+                {/* ✅ Back button on mobile */}
+                <button className="back-btn" onClick={handleBack} aria-label="Back to conversations">
+                  ←
+                </button>
+                <img src={getImageUrl(selectedUser.profilePicture)} alt={selectedUser.firstName} width="48" height="48" />
+                <div className="chat-user-info">
+                  <h4>{selectedUser.firstName} {selectedUser.lastName}</h4>
+                  {/* <small className="chat-user-id">ID: {selectedUser._id}</small> */}
+                </div>
+                <button className="video-call-btn" onClick={handleStartVideoCall} aria-label="Start video call" title="Start video call">
+                  📹
+                </button>
+              </div>
+
+              <div className="messages-container">
+                {messages?.length > 0 ? (
+                  messages.map((message) => {
+                    const isSent = message.sender === currentUser._id || message.sender?._id === currentUser._id;
+                    return (
+                      <div key={message._id} className={`message ${isSent ? 'sent' : 'received'}`}>
+                        <img
+                          className="message-avatar"
+                          src={getImageUrl(isSent ? currentUser.profilePicture : selectedUser.profilePicture)}
+                          alt="avatar" width="32" height="32"
+                        />
+                        <div>
+                          <div className="message-text">{message.text}</div>
+                          <small className="message-time">{formatTime(message.createdAt)}</small>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="no-chat-selected">
+                    <p>No messages yet. Start a conversation!</p>
+                  </div>
+                )}
+                <div ref={messagesEndRef}></div>
+              </div>
+
+              <form className="message-input-form" onSubmit={handleSendMessage}>
+                <input
+                  type="text"
+                  placeholder="Type your message..."
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                />
+                <button type="submit" disabled={sending}>
+                  {sending ? 'Sending...' : 'Send'}
+                </button>
+              </form>
+            </>
+          ) : (
+            <div className="no-chat-selected">
+              <div>
+                <h3>Select a conversation</h3>
+                <p>Select a conversation or click "New Chat" to start messaging</p>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
+
+      {showVideoCall && (
+        <VideoCall
+          incomingCall={pendingIncomingCall}
+          selectedUser={selectedUser}
+          currentUser={currentUser}
+          onClose={() => {
+            setShowVideoCall(false);
+            setPendingIncomingCall(null);
+            soundService.stopRingtone();
+          }}
+        />
+      )}
+    </>
+  );
 };
 
 export default Chat;

@@ -20,6 +20,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
     const [isChatOpen, setIsChatOpen] = useState(true);
     const [isAIActive, setIsAIActive] = useState(true); // Activé par défaut
     const [isProcessing, setIsProcessing] = useState(false);
+    const isProcessingRef = useRef(false); // Fix: ref pour éviter les closures périmées
     const [aiStatus, setAiStatus] = useState("Initialisation...");
 
     const localVideoRef = useRef(null);
@@ -32,12 +33,8 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
     const lastPredictionTimeRef = useRef(0);
     const chatEndRef = useRef(null);
     const isMountedRef = useRef(true);
-    const isAIActiveRef = useRef(true);    // Fix: ref pour éviter les stale closures
-    const isProcessingRef = useRef(false); // Fix: ref pour éviter les stale closures
-
-    // Sync refs avec les states
-    useEffect(() => { isAIActiveRef.current = isAIActive; }, [isAIActive]);
-    useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
+    const isAIActiveRef = useRef(true); // Fix: ref pour isAIActive pour les closures
+    const callTimeoutRef = useRef(null);
 
     // Scroll to bottom of chat
     const scrollChatToBottom = useCallback(() => {
@@ -124,7 +121,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
 
     // Fonction pour envoyer la prédiction
     const sendPrediction = useCallback(async (landmarks) => {
-        if (isProcessingRef.current) return;
+        if (isProcessingRef.current) return; // Fix: utiliser le ref pour éviter la closure périmée
         
         isProcessingRef.current = true;
         setIsProcessing(true);
@@ -174,11 +171,11 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
             console.error("❌ Erreur API:", err.message);
         } finally {
             setTimeout(() => {
-                isProcessingRef.current = false;
+                isProcessingRef.current = false; // Fix: réinitialiser le ref
                 setIsProcessing(false);
             }, 1000);
         }
-    }, [addChatMessage, currentUser._id, selectedUser?._id]);
+    }, [addChatMessage, currentUser._id, selectedUser?._id]); // Fix: retirer isProcessing des dépendances
 
     // Initialiser la détection des mains (correction du nom de la fonction)
     const initHandDetection = useCallback(async () => {
@@ -206,7 +203,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
             });
 
             hands.onResults(async (results) => {
-                if (!isMountedRef.current || !isAIActiveRef.current) return;
+                if (!isMountedRef.current || !isAIActiveRef.current) return; // Fix: utiliser le ref
 
                 const hasHands = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
                 
@@ -227,7 +224,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                         }
                     }
                     
-                    if (data_aux.length === 84 && !isProcessingRef.current) {
+                    if (data_aux.length === 84 && !isProcessingRef.current) { // Fix: utiliser le ref
                         await sendPrediction(data_aux);
                     }
                 } else {
@@ -249,7 +246,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                     // Ignorer les erreurs normales
                 }
                 
-                if (isMountedRef.current && isAIActiveRef.current) {
+                if (isMountedRef.current && isAIActiveRef.current) { // Fix: utiliser le ref
                     animationFrameRef.current = requestAnimationFrame(detectFrame);
                 }
             };
@@ -261,28 +258,31 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
             console.error('Failed to initialize MediaPipe:', error);
             setAiStatus("❌ Erreur d'initialisation");
         }
-    }, [cleanupHands, sendPrediction]);
+    }, [cleanupHands, sendPrediction]); // Fix: retirer isAIActive et isProcessing des dépendances
 
     // Toggle AI detection
     const toggleAIDetection = useCallback(() => {
-        const currentlyActive = isAIActiveRef.current;
-        isAIActiveRef.current = !currentlyActive;
-        setIsAIActive(!currentlyActive);
-        if (!currentlyActive) {
-            // On active
+        const nextActive = !isAIActiveRef.current; // Fix: lire depuis le ref, pas le state périmé
+        isAIActiveRef.current = nextActive;
+        setIsAIActive(nextActive);
+        if (nextActive) {
             setAiStatus("Activation en cours...");
             initHandDetection();
         } else {
-            // On désactive
             setAiStatus("Désactivé");
             cleanupHands();
         }
-    }, [initHandDetection, cleanupHands]);
+    }, [initHandDetection, cleanupHands]); // Fix: retirer isAIActive des dépendances
 
     // End call with proper cleanup
     const endCall = useCallback(() => {
-        isMountedRef.current = false;
-        
+        // Fix: ne pas mettre isMountedRef à false ici car le composant peut rester monté
+        // Fix: annuler le timeout d'appel sans réponse
+        if (callTimeoutRef.current) {
+            clearTimeout(callTimeoutRef.current);
+            callTimeoutRef.current = null;
+        }
+
         if (animationFrameRef.current) {
             cancelAnimationFrame(animationFrameRef.current);
             animationFrameRef.current = null;
@@ -351,8 +351,12 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                 if (remoteVideoRef.current) {
                     remoteVideoRef.current.srcObject = remoteStream;
                 }
+                // Annuler le timeout si l'appel est connecté
+                if (callTimeoutRef.current) {
+                    clearTimeout(callTimeoutRef.current);
+                    callTimeoutRef.current = null;
+                }
                 setCallStatus('connected');
-                // Démarrer la détection après la connexion
                 setTimeout(() => {
                     if (isMountedRef.current) {
                         initHandDetection();
@@ -366,6 +370,15 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
             });
 
             peerRef.current = peer;
+
+            // Fix: Timeout de 30s si l'autre utilisateur ne répond pas
+            callTimeoutRef.current = setTimeout(() => {
+                if (isMountedRef.current && callStatus === 'calling') {
+                    toast.error(`${selectedUser?.firstName} ne répond pas`);
+                    endCall();
+                }
+            }, 30000);
+
         } catch (error) {
             console.error('Error starting call:', error);
             setCallStatus('idle');
@@ -380,9 +393,10 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
             const peer = new Peer({ initiator: false, trickle: false, stream });
 
             peer.on('signal', (signal) => {
+                // Fix: toUserId doit être l'appelant pour que le signal lui revienne
                 socketService.emit('accept_call', {
-                    fromUserId: incomingCall.fromUserId,
-                    toUserId: currentUser._id,
+                    toUserId: incomingCall.fromUserId,   // ← l'appelant reçoit le signal
+                    fromUserId: currentUser._id,          // ← moi (celui qui répond)
                     signal
                 });
             });
@@ -425,26 +439,40 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
         };
 
         const handleCallAccepted = (data) => {
-            if (peerRef.current) {
-                peerRef.current.signal(data.signal);
+            if (!peerRef.current) {
+                console.warn('call_accepted reçu mais peer inexistant');
+                return;
             }
-            setCallStatus('connected');
+            try {
+                peerRef.current.signal(data.signal);
+                // Ne pas setCallStatus ici — c'est le event 'stream' qui confirme la connexion
+            } catch (err) {
+                console.error('Erreur signal call_accepted:', err);
+                endCall();
+            }
         };
 
         const handleCallEnded = () => {
             endCall();
         };
 
+        const handleCallRejected = () => {
+            toast.error(`${selectedUser?.firstName} a refusé l'appel`);
+            endCall();
+        };
+
         socketService.on('receive_translation', handleReceiveTranslation);
         socketService.on('call_accepted', handleCallAccepted);
         socketService.on('call_ended', handleCallEnded);
+        socketService.on('call_rejected', handleCallRejected);
 
         return () => {
             socketService.off('receive_translation', handleReceiveTranslation);
             socketService.off('call_accepted', handleCallAccepted);
             socketService.off('call_ended', handleCallEnded);
+            socketService.off('call_rejected', handleCallRejected);
         };
-    }, [addChatMessage, endCall]);
+    }, [addChatMessage, endCall, selectedUser?.firstName]);
 
     // Cleanup on unmount
     useEffect(() => {
