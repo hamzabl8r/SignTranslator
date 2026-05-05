@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = "https://backpfe-production.up.railway.app";
+const SOCKET_URL = "https://backpfe-production-789f.up.railway.app/";
+
 
 class SocketService {
     constructor() {
