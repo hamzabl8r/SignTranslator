@@ -1,266 +1,221 @@
-/* ══════════════════════════════════════════════════════════════════
-   DATASET SECTION — AdminDashboard
-   Add these rules to AdminDashboard.css
-   ══════════════════════════════════════════════════════════════════ */
 
-/* Filter bar */
-.dataset-summary-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
+.history-container {
+  padding: 24px;
+  max-width: 1000px;
+  margin: 0 auto;
+  color: var(--text-main);
+  font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
-.dataset-filter-btn {
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.history-header h2 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.history-header p {
+  margin: 8px 0 0;
+  color: var(--text-dim);
+  font-size: 1.02rem;
+}
+
+.refresh-btn {
+  background: var(--accent-blue);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 16px;
-  border-radius: 8px;
-  border: 1.5px solid var(--border, #e5e7eb);
-  background: var(--card-bg, #fff);
-  color: var(--text, #111);
-  font-size: 13px;
+  transition: all 0.3s ease;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: #5a9cd4;
+  transform: translateY(-2px);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* ==================== Error & Loading ==================== */
+
+.history-error {
+  background: rgba(231, 76, 60, 0.15);
+  color: var(--danger);
+  padding: 16px 20px;
+  border-radius: 10px;
+  border-left: 5px solid var(--danger);
+  margin-bottom: 24px;
   font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
 }
 
-.dataset-filter-btn.active {
-  border-color: var(--filter-color, #3b82f6);
-  background: color-mix(in srgb, var(--filter-color, #3b82f6) 8%, transparent);
+.history-loading {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-dim);
 }
 
-.filter-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-  padding: 0 6px;
+.history-spinner {
+  width: 48px;
+  height: 48px;
+  border: 5px solid rgba(73, 136, 196, 0.2);
+  border-top: 5px solid var(--accent-blue);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
 }
 
-/* Dataset list */
-.dataset-list {
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ==================== Empty State ==================== */
+
+.history-empty {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--text-dim);
+}
+
+.history-empty-icon {
+  font-size: 4.5rem;
+  display: block;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.history-empty p {
+  font-size: 1.25rem;
+  margin: 12px 0;
+}
+
+.history-empty-sub {
+  font-size: 1rem;
+  opacity: 0.8;
+}
+
+/* ==================== History List ==================== */
+
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
 }
 
-.dataset-card {
-  background: var(--card-bg, #fff);
-  border: 1.5px solid var(--border, #e5e7eb);
-  border-radius: 12px;
-  padding: 18px 20px;
-  transition: box-shadow 0.15s;
-}
-
-.dataset-card:hover {
-  box-shadow: 0 4px 16px rgba(0,0,0,0.07);
-}
-
-.dataset-card--pending  { border-left: 4px solid #f59e0b; }
-.dataset-card--approved { border-left: 4px solid #22c55e; }
-.dataset-card--rejected { border-left: 4px solid #ef4444; }
-
-/* Card header */
-.dataset-card-header {
+.history-item {
+  padding: 18px 22px;
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-
-.dataset-card-title {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.dataset-card-title h4 {
-  margin: 0 0 4px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text, #111);
-}
-
-.dataset-submitter {
-  font-size: 12px;
-  color: var(--muted, #6b7280);
-}
-
-/* Status badge */
-.dataset-status-badge {
-  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 12px;
+  transition: all 0.3s ease;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.history-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+/* Status Left Border */
+.history-item--pending   { border-left: 5px solid #f1c40f; }
+.history-item--approved  { border-left: 5px solid var(--success); }
+.history-item--rejected  { border-left: 5px solid var(--danger); }
+.history-item--completed { border-left: 5px solid #2ecc71; }
+.history-item--failed    { border-left: 5px solid #e67e22; }
+
+.history-item-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.history-item-icon {
+  font-size: 1.8rem;
+  width: 42px;
+  flex-shrink: 0;
+}
+
+.history-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-item-type {
+  display: inline-block;
+  background: rgba(73, 136, 196, 0.25);
+  color: var(--light-blue);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 3px 11px;
+  border-radius: 20px;
+  margin-bottom: 6px;
+}
+
+.history-item-content {
+  display: block;
+  font-weight: 500;
+  font-size: 1.05rem;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-item-date {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+}
+
+/* Badge */
+.history-item-badge {
+  padding: 6px 16px;
+  border-radius: 30px;
+  font-size: 0.9rem;
   font-weight: 600;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-.dataset-status-badge--pending  { background: #fef9c3; color: #92400e; }
-.dataset-status-badge--approved { background: #dcfce7; color: #15803d; }
-.dataset-status-badge--rejected { background: #fee2e2; color: #b91c1c; }
+.history-item-badge--pending   { background: #f1c40f; color: #1a2a4a; }
+.history-item-badge--approved  { background: var(--success); color: white; }
+.history-item-badge--rejected  { background: var(--danger); color: white; }
+.history-item-badge--completed { background: #27ae60; color: white; }
+.history-item-badge--failed    { background: #e67e22; color: white; }
 
-/* Description */
-.dataset-description {
-  font-size: 13px;
-  color: var(--muted, #6b7280);
-  margin: 0 0 10px;
-  line-height: 1.5;
-}
-
-/* Reject reason block */
-.dataset-reject-reason {
-  background: #fff1f2;
-  border: 1px solid #fecdd3;
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 13px;
-  color: #b91c1c;
-  margin-bottom: 10px;
-}
-
-/* Meta row */
-.dataset-meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 14px;
-}
-
-.dataset-file-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: #3b82f6;
-  text-decoration: none;
-}
-
-.dataset-file-link:hover { text-decoration: underline; }
-
-.dataset-tag {
-  background: var(--tag-bg, #f1f5f9);
-  color: var(--muted, #64748b);
-  border-radius: 6px;
-  padding: 2px 8px;
-  font-size: 11px;
-  font-weight: 500;
-}
-
-/* Action row */
-.dataset-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-/* Approve button */
-.btn-approve {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 18px;
-  border-radius: 8px;
-  border: none;
-  background: #22c55e;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
-}
-
-.btn-approve:hover   { background: #16a34a; }
-.btn-approve:disabled { opacity: 0.6; cursor: not-allowed; }
-
-/* Reject button */
-.btn-reject {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 18px;
-  border-radius: 8px;
-  border: 1.5px solid #ef4444;
-  background: transparent;
-  color: #ef4444;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
-}
-
-.btn-reject:hover   { background: #fee2e2; }
-.btn-reject:disabled { opacity: 0.6; cursor: not-allowed; }
-
-
-/* ══════════════════════════════════════════════════════════════════
-   HISTORY STATUS — History.css
-   Add these rules to History.css
-   ══════════════════════════════════════════════════════════════════ */
-
-/* Awaiting-review card highlight */
-.history-card--awaiting {
-  border-left: 4px solid #f59e0b;
-  background: color-mix(in srgb, #fef9c3 30%, transparent);
-}
-
-/* Pending notice inside card */
-.item-pending-notice {
-  font-size: 12px;
-  color: #92400e;
-  background: #fef9c3;
-  border: 1px solid #fde68a;
-  border-radius: 6px;
-  padding: 6px 10px;
-  margin: 6px 0 4px;
-  line-height: 1.5;
-}
-
-/* Reject reason inside card */
-.item-reject-reason {
-  font-size: 12px;
-  color: #b91c1c;
-  background: #fee2e2;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  padding: 6px 10px;
-  margin: 6px 0 4px;
-  line-height: 1.5;
-}
-
-/* Status badge variants */
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.status-badge.pending   { background: #fef9c3; color: #92400e; }
-.status-badge.approved  { background: #dcfce7; color: #15803d; }
-.status-badge.rejected  { background: #fee2e2; color: #b91c1c; }
-.status-badge.completed { background: #dbeafe; color: #1e40af; }
-.status-badge.failed    { background: #f3f4f6; color: #374151; }
-
-.status-badge-icon {
-  font-size: 13px;
-  line-height: 1;
+/* Responsive */
+@media (max-width: 768px) {
+  .history-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .history-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .history-item-badge {
+    align-self: flex-start;
+  }
 }

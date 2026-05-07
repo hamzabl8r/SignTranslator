@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import './Styles/AdminDashboard.css';
 
-const BASE_URL = 'https://backpfe-production.up.railway.app';
+const BASE_URL = 'https://backpfe-production-789f.up.railway.app';
 
 const AdminDashboard = () => {
   const dispatch = useDispatch();
@@ -76,10 +76,25 @@ const AdminDashboard = () => {
   const avatarSrc = (pic) =>
     pic ? `${BASE_URL}${pic}` : '/default-avatar.png';
 
+  // ── Auth helper ───────────────────────────────────────────────────────────
+  const getAuthHeader = useCallback(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return {};
+    const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+    return {
+      Authorization: authHeader,
+      'Cache-Control': 'no-cache',
+      Pragma: 'no-cache',
+    };
+  }, []);
+
   // ── Data fetching ─────────────────────────────────────────────────────────
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await axios.get(`${BASE_URL}/user/`);
+      const res = await axios.get(`${BASE_URL}/user/`, {
+        headers: getAuthHeader(),
+        params: { _t: Date.now() },
+      });
       const users = res.data.users || [];
       setAllUsers(users);
       setFilteredUsers(users);
@@ -88,45 +103,55 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, getAuthHeader]);
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await axios.get(`${BASE_URL}/user/stats`);
+      const res = await axios.get(`${BASE_URL}/user/stats`, {
+        headers: getAuthHeader(),
+        params: { _t: Date.now() },
+      });
       setStats(prev => ({ ...prev, ...res.data }));
     } catch {}
-  }, []);
+  }, [getAuthHeader]);
 
   const fetchRecentActivity = useCallback(async () => {
     try {
-      const res = await axios.get(`${BASE_URL}/user/activity`);
+      const res = await axios.get(`${BASE_URL}/user/activity`, {
+        headers: getAuthHeader(),
+        params: { _t: Date.now() },
+      });
       setRecentActivity(res.data.activities || []);
     } catch {
       setRecentActivity([]);
     }
-  }, []);
+  }, [getAuthHeader]);
 
   const logActivity = useCallback(async (action, details) => {
+    if (!user?._id) return;
     try {
       await axios.post(`${BASE_URL}/user/log-activity`, {
-        userId: user._id, action, details, timestamp: new Date()
-      });
+        userId: user?._id, action, details, timestamp: new Date()
+      }, { headers: getAuthHeader() });
       fetchRecentActivity();
     } catch {}
-  }, [user._id, fetchRecentActivity]);
+  }, [user?._id, fetchRecentActivity, getAuthHeader]);
 
   // ── Dataset fetching ──────────────────────────────────────────────────────
   const fetchDatasets = useCallback(async () => {
     setDatasetsLoading(true);
     try {
-      const res = await axios.get(`${BASE_URL}/dataset/all`);
+      const res = await axios.get(`${BASE_URL}/dataset/all`, {
+        headers: getAuthHeader(),
+        params: { _t: Date.now() },
+      });
       setPendingDatasets(res.data.datasets || []);
     } catch {
       showToast('Erreur lors du chargement des datasets', 'error');
     } finally {
       setDatasetsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, getAuthHeader]);
 
   useEffect(() => {
     fetchUsers();
@@ -144,7 +169,7 @@ const AdminDashboard = () => {
   const approveDataset = async (datasetId) => {
     setDatasetActionLoading(datasetId);
     try {
-      await axios.put(`${BASE_URL}/dataset/${datasetId}/approve`, { status: 'approved' });
+      await axios.put(`${BASE_URL}/dataset/${datasetId}/approve`, { status: 'approved' }, { headers: getAuthHeader() });
       setPendingDatasets(prev =>
         prev.map(d => d._id === datasetId ? { ...d, status: 'approved' } : d)
       );
@@ -170,7 +195,7 @@ const AdminDashboard = () => {
       await axios.put(`${BASE_URL}/dataset/${datasetToReject._id}/reject`, {
         status: 'rejected',
         reason: rejectReason
-      });
+      }, { headers: getAuthHeader() });
       setPendingDatasets(prev =>
         prev.map(d => d._id === datasetToReject._id
           ? { ...d, status: 'rejected', rejectReason }
@@ -385,7 +410,7 @@ const AdminDashboard = () => {
     try {
       await axios.post(`${BASE_URL}/notifications/send`, {
         ...notifForm,
-        fromAdmin: user._id
+        fromAdmin: user?._id
       });
       showToast('Notification envoyée !');
       setShowNotifModal(false);
@@ -1095,6 +1120,7 @@ const AdminDashboard = () => {
             <div className="modal-body">
               <p><strong>Nom :</strong> {selectedDataset.name || selectedDataset.title}</p>
               <p><strong>Description :</strong> {selectedDataset.description || '—'}</p>
+              <p><strong>Type :</strong> {selectedDataset.type || '—'}</p>
               <p><strong>Soumis par :</strong> {selectedDataset.user?.firstName} {selectedDataset.user?.lastName} ({selectedDataset.user?.email})</p>
               <p><strong>Date de soumission :</strong> {formatDate(selectedDataset.createdAt)}</p>
               <p><strong>Statut :</strong>
@@ -1111,6 +1137,44 @@ const AdminDashboard = () => {
                   <a href={`${BASE_URL}${selectedDataset.fileUrl}`} target="_blank" rel="noopener noreferrer">
                     Télécharger / Voir
                   </a>
+                </p>
+              )}
+
+              {/* ── Images du dataset ── */}
+              {selectedDataset.images && selectedDataset.images.length > 0 && (
+                <div style={{ marginTop: 20 }}>
+                  <p style={{ marginBottom: 10 }}>
+                    <strong>Images ({selectedDataset.images.length}) :</strong>
+                  </p>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+                    gap: 10,
+                  }}>
+                    {selectedDataset.images.map((img, i) => (
+                      <a
+                        key={i}
+                        href={img}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ display: 'block', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}
+                      >
+                        <img
+                          src={img}
+                          alt={`dataset-img-${i}`}
+                          style={{ width: '100%', height: 110, objectFit: 'cover', display: 'block' }}
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Message si pas d'images */}
+              {(!selectedDataset.images || selectedDataset.images.length === 0) && (
+                <p style={{ marginTop: 16, color: 'var(--muted)', fontStyle: 'italic' }}>
+                  Aucune image soumise avec ce dataset.
                 </p>
               )}
             </div>

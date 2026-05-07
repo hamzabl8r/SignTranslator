@@ -9,7 +9,7 @@ const Auth = () => {
   const [isLoginView, setIsLoginView] = useState(true);
   
   const googleLogin = () => {
-    window.location.href = "https://backpfe-production.up.railway.app/auth/google";
+    window.location.href = "https://backpfe-production-789f.up.railway.app/auth/google";
   };
 
   const logo = "/logo.png";
