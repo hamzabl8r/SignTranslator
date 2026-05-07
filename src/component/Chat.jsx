@@ -19,7 +19,7 @@ import soundService from '../services/soundService';
 import './Styles/Chat.css';
 
 const Chat = () => {
-  const { userId } = useParams();          // ← reads /chat/:userId
+  const { userId } = useParams();
   const navigate = useNavigate();
 
   const [messageText, setMessageText] = useState('');
@@ -36,12 +36,18 @@ const Chat = () => {
   const { conversations, messages, users, sending } = useSelector((state) => state.message);
 
   const messagesEndRef = useRef(null);
+
+ 
+  const selectedUserRef = useRef(selectedUser);
+  useEffect(() => {
+    selectedUserRef.current = selectedUser;
+  }, [selectedUser]);
+
   const isMobile = () => window.innerWidth <= 768;
 
   const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
   const closeSidebar = () => setIsSidebarOpen(false);
 
-  // Select user + update URL
   const handleUserSelect = (user) => {
     if (!user?._id) return;
     setSelectedUser(user);
@@ -50,7 +56,6 @@ const Chat = () => {
     navigate(`/chat/${user._id}`, { replace: true });
   };
 
-  // Deselect → back to /chat
   const handleBack = () => {
     setSelectedUser(null);
     navigate('/chat', { replace: true });
@@ -62,7 +67,7 @@ const Chat = () => {
     setShowVideoCall(true);
   };
 
-  // ✅ Auto-select user from URL param once users are loaded
+  // Auto-select user from URL param once users are loaded
   useEffect(() => {
     if (!userId || !users?.length) return;
     const userFromUrl = users.find((u) => u._id === userId);
@@ -98,9 +103,12 @@ const Chat = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, [selectedUser]);
 
-  // Socket initialization
+  // FIX 2: Socket initialization — dispatch the thunk properly.
+  // FIX 3: Remove selectedUser from the dependency array to avoid re-registering
+  //         listeners on every user selection. Use selectedUserRef instead.
   useEffect(() => {
     if (!currentUser?._id) return;
+
     initializeSocket(currentUser._id);
 
     const handleNewMessage = (message) => {
@@ -109,22 +117,27 @@ const Chat = () => {
       soundService.playMessageReceived();
       toast.success(`New message from ${message.sender?.firstName || 'Unknown'}`);
     };
+
     const handleMessageSent = (message) => {
       dispatch(addMessage(message));
       soundService.playMessageSent();
     };
+
+    // FIX 4: Use selectedUserRef.current instead of stale selectedUser closure
     const handleMessagesRead = (data) => {
-      if (selectedUser?._id === data.userId) {
+      if (selectedUserRef.current?._id === data.userId) {
         dispatch(markMessageRead({ conversationId: data.conversationId }));
       }
     };
+
     const handleIncomingCall = (data) => {
       if (data.fromUserId !== currentUser._id) {
         setPendingIncomingCall(data);
         setShowVideoCall(true);
         soundService.startRingtone();
         toast(`📞 Incoming call from ${data.callerInfo?.name || 'Someone'}`, {
-          duration: 10000, icon: '📞',
+          duration: 10000,
+          icon: '📞',
         });
       }
     };
@@ -140,7 +153,9 @@ const Chat = () => {
       socketService.off('messages_read', handleMessagesRead);
       socketService.off('incoming_call', handleIncomingCall);
     };
-  }, [currentUser, dispatch, selectedUser]);
+  // selectedUser intentionally removed — using selectedUserRef to avoid stale closure
+  // while preventing unnecessary listener re-registration
+  }, [currentUser, dispatch]);
 
   // Load conversations and users
   useEffect(() => {
@@ -160,6 +175,7 @@ const Chat = () => {
       dispatch(setCurrentConversation(existingConv));
       dispatch(getMessages(existingConv._id));
       if (socketService.isConnected()) {
+        // FIX 5: markReadSocket is a plain function — call directly, not dispatched
         markReadSocket({ conversationId: existingConv._id, userId: currentUser?._id });
       }
     } else {
@@ -176,6 +192,7 @@ const Chat = () => {
     e.preventDefault();
     if (!messageText.trim()) { toast.error('Please enter a message'); return; }
     if (!selectedUser) { toast.error('Please select a user to chat with'); return; }
+    // FIX 6: sendMessageSocket is a plain function — call directly, not dispatched
     sendMessageSocket({ senderId: currentUser._id, receiverId: selectedUser._id, text: messageText });
     setMessageText('');
   };
@@ -185,7 +202,9 @@ const Chat = () => {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   const getImageUrl = (path) =>
-    path ? `https://backpfe-production.up.railway.app${path}` : '/default-avatar.png';
+    path
+      ? `https://backpfe-production-789f.up.railway.app${path}`
+      : 'https://img.freepik.com/free-vector/user-blue-gradient_78370-4692.jpg?w=150';
   const getLastMessage = (conv) => conv?.lastMessage?.text || 'No messages yet';
   const getLastMessageTime = (conv) => formatTime(conv?.lastMessage?.createdAt);
   const filteredUsers = users?.filter((u) => u._id !== currentUser?._id) || [];
@@ -262,14 +281,12 @@ const Chat = () => {
           {selectedUser ? (
             <>
               <div className="chat-header">
-                {/* ✅ Back button on mobile */}
                 <button className="back-btn" onClick={handleBack} aria-label="Back to conversations">
                   ←
                 </button>
                 <img src={getImageUrl(selectedUser.profilePicture)} alt={selectedUser.firstName} width="48" height="48" />
                 <div className="chat-user-info">
                   <h4>{selectedUser.firstName} {selectedUser.lastName}</h4>
-                  {/* <small className="chat-user-id">ID: {selectedUser._id}</small> */}
                 </div>
                 <button className="video-call-btn" onClick={handleStartVideoCall} aria-label="Start video call" title="Start video call">
                   📹

@@ -83,7 +83,7 @@ const Header = () => {
                   <Link to="/profil" className="nav-profile">
                     <span className="nav-profile-avatar">
                       {user.profilePic ? (
-                       <img src={`http://localhost:5000${user.profilePic}`} alt="Profile" />
+                       <img src={`https://backpfe-production-789f.up.railway.app${user.profilePic}`} alt="Profile" />
                         ) : (
                           user.firstName.charAt(0) || "?"
                         )}

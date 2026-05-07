@@ -10,9 +10,15 @@ import './Styles/VideoCall.css';
 
 const AI_SERVER_URL = 'https://zen-footing-depravity.ngrok-free.dev';
 
-const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) => {
+const VideoCall = ({ currentUser, selectedUser, incomingCall: initialIncomingCall, onClose }) => {
     const [callStatus, setCallStatus] = useState(initialIncomingCall ? 'ringing' : 'idle');
     const [incomingCall, setIncomingCall] = useState(initialIncomingCall || null);
+
+    // Keep ref in sync so timeouts/callbacks always read the latest status
+    const setCallStatusSynced = (status) => {
+        callStatusRef.current = status;
+        setCallStatus(status);
+    };
     const [localPrediction, setLocalPrediction] = useState("");
     const [remotePrediction, setRemotePrediction] = useState("");
     const [chatMessages, setChatMessages] = useState([]);
@@ -35,6 +41,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
     const isMountedRef = useRef(true);
     const isAIActiveRef = useRef(true); // Fix: ref pour isAIActive pour les closures
     const callTimeoutRef = useRef(null);
+    const callStatusRef = useRef('idle'); // Fix: track callStatus in ref to avoid stale closure
 
     // Scroll to bottom of chat
     const scrollChatToBottom = useCallback(() => {
@@ -70,7 +77,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
             sendMessageSocket({
                 senderId: isLocal ? currentUser._id : selectedUser._id,
                 receiverId: isLocal ? selectedUser._id : currentUser._id,
-                text: `[Sign Language] ${text}`,
+                text: `🤟 ${text}`,
             });
         } catch (error) {
             console.error('Error saving message to DB:', error);
@@ -333,7 +340,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
     };
 
     const startCall = async () => {
-        setCallStatus('calling');
+        setCallStatusSynced('calling');
         try {
             const stream = await setupMedia();
             const peer = new Peer({ initiator: true, trickle: false, stream });
@@ -356,7 +363,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                     clearTimeout(callTimeoutRef.current);
                     callTimeoutRef.current = null;
                 }
-                setCallStatus('connected');
+                setCallStatusSynced('connected');
                 setTimeout(() => {
                     if (isMountedRef.current) {
                         initHandDetection();
@@ -371,9 +378,9 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
 
             peerRef.current = peer;
 
-            // Fix: Timeout de 30s si l'autre utilisateur ne répond pas
+            // Fix: use callStatusRef to avoid stale closure
             callTimeoutRef.current = setTimeout(() => {
-                if (isMountedRef.current && callStatus === 'calling') {
+                if (isMountedRef.current && callStatusRef.current === 'calling') {
                     toast.error(`${selectedUser?.firstName} ne répond pas`);
                     endCall();
                 }
@@ -381,7 +388,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
 
         } catch (error) {
             console.error('Error starting call:', error);
-            setCallStatus('idle');
+            setCallStatusSynced('idle');
         }
     };
 
@@ -405,7 +412,7 @@ const VideoCall = ({ currentUser, selectedUser, initialIncomingCall, onClose }) 
                 if (remoteVideoRef.current) {
                     remoteVideoRef.current.srcObject = remoteStream;
                 }
-                setCallStatus('connected');
+                setCallStatusSynced('connected');
                 setTimeout(() => {
                     if (isMountedRef.current) {
                         initHandDetection();

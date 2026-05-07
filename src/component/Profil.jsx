@@ -10,12 +10,12 @@ const Profil = () => {
     const [editMode, setEditMode] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [updating, setUpdating] = useState(false);
-    
+
     const dispatch = useDispatch();
     const user = useSelector((state) => state.user.user);
     const [file, setFile] = useState(null);
     const { toast, showToast, hideToast } = useToast();
-    
+
     const [editData, setEditData] = useState({
         firstName: user?.firstName || '',
         lastName: user?.lastName || '',
@@ -24,7 +24,6 @@ const Profil = () => {
         dateOfBirth: user?.dateOfBirth ? user.dateOfBirth.split('T')[0] : ''
     });
 
-    // Update editData when user changes
     useEffect(() => {
         if (user) {
             setEditData({
@@ -38,24 +37,17 @@ const Profil = () => {
     }, [user]);
 
     const handleUpload = async () => {
-        if (!file) {
-            showToast("Please select a file first", "error");
-            return;
-        }
-        
+        if (!file) { showToast("Please select a file first", "error"); return; }
         setUploading(true);
         const formData = new FormData();
         formData.append("profilePic", file);
-        
         try {
-            const response = await dispatch(updateProfilePic({ formData })).unwrap();
-            console.log("Upload success:", response);
+            await dispatch(updateProfilePic({ formData })).unwrap();
             setUpdatePict(false);
             setFile(null);
             await dispatch(userCurrent());
             showToast("Photo updated successfully!", "success");
         } catch (error) {
-            console.error("Upload error:", error);
             showToast("Upload failed: " + (error?.msg || error), "error");
         } finally {
             setUploading(false);
@@ -77,31 +69,21 @@ const Profil = () => {
             phoneNumber: user?.phoneNumber || '',
             dateOfBirth: user?.dateOfBirth ? user.dateOfBirth.split('T')[0] : ''
         });
-        showToast("Edit mode activated", "info");
     };
 
     const handleEditChange = (e) => {
         const { name, value } = e.target;
-        setEditData(prev => ({
-            ...prev,
-            [name]: value
-        }));
+        setEditData(prev => ({ ...prev, [name]: value }));
     };
 
     const handleSave = async () => {
         setUpdating(true);
         try {
-            const result = await dispatch(editUser({ 
-                id: user._id, 
-                editprofil: editData 
-            })).unwrap();
-            
-            console.log("Update success:", result);
+            await dispatch(editUser({ id: user._id, editprofil: editData })).unwrap();
             await dispatch(userCurrent());
             setEditMode(false);
             showToast("Profile updated successfully!", "success");
         } catch (error) {
-            console.error("Update error:", error);
             showToast("Update failed: " + (error?.msg || error), "error");
         } finally {
             setUpdating(false);
@@ -110,176 +92,195 @@ const Profil = () => {
 
     const handleCancelEdit = () => {
         setEditMode(false);
-        showToast("Edit cancelled", "info");
     };
+
+    const avatarSrc = user?.profilePic
+        ? `https://backpfe-production-789f.up.railway.app${user.profilePic}`
+        : "https://img.freepik.com/free-vector/user-blue-gradient_78370-4692.jpg?w=150";
 
     return (
         <>
             {toast && (
-                <Toast 
-                    message={toast.message} 
-                    type={toast.type} 
-                    onClose={hideToast} 
-                />
+                <Toast message={toast.message} type={toast.type} onClose={hideToast} />
             )}
-            <div className="profil-container">
-                <div className="box">
-                    <div className="profil-pict">
-                        <img 
-                            src={user?.profilePic 
-                                ? `https://backpfe-production.up.railway.app${user.profilePic}` 
-                                : "https://via.placeholder.com/150"} 
-                            alt="profile" 
-                            onError={(e) => { 
-                                e.target.src = "https://img.freepik.com/free-vector/user-blue-gradient_78370-4692.jpg?semt=ais_hybrid&w=740&q=80"; 
-                            }}
-                        />
-                        
-                        {!updatePict ? (
-                            <button onClick={() => setUpdatePict(true)} className="update-btn">
-                                Update Photo
-                            </button>
-                        ) : (
-                            <div className="upload-section">
-                                <input 
-                                    type="file" 
-                                    onChange={(e) => setFile(e.target.files[0])} 
-                                    accept="image/*"
-                                    className="file-input"
-                                    disabled={uploading}
-                                />
-                                <div className="upload-actions">
-                                    <button 
+
+            <div className="profil-root">
+                <div className="profil-card">
+
+                    {/* Cover banner */}
+                    <div className="cover-band">
+                        <div className="avatar-wrap">
+                            <img
+                                src={avatarSrc}
+                                alt="profile"
+                                onError={(e) => {
+                                    e.target.src = "https://img.freepik.com/free-vector/user-blue-gradient_78370-4692.jpg?w=150";
+                                }}
+                            />
+                            <span className="online-badge" />
+                        </div>
+                    </div>
+
+                    <div className="card-body">
+                        {/* Name + Edit button */}
+                        <div className="name-row">
+                            <h1 className="display-name">
+                                {user?.firstName} {user?.lastName}
+                            </h1>
+                            {!editMode && (
+                                <button className="btn-edit" onClick={handleEditClick}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                    Edit Profile
+                                </button>
+                            )}
+                        </div>
+                        <p className="member-tag">Member since 2024</p>
+
+                        {/* Photo update section */}
+                        <div className="photo-section">
+                            {!updatePict ? (
+                                <button className="btn-photo" onClick={() => setUpdatePict(true)}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                                    Change photo
+                                </button>
+                            ) : (
+                                <div className="upload-section">
+                                    <label className="file-label">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+                                        {file ? file.name.slice(0, 22) + (file.name.length > 22 ? '…' : '') : 'Choose file'}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => setFile(e.target.files[0])}
+                                            disabled={uploading}
+                                            style={{ display: 'none' }}
+                                        />
+                                    </label>
+                                    <button
+                                        className="btn-upload"
                                         onClick={handleUpload}
-                                        className="upload-submit-btn"
                                         disabled={uploading || !file}
                                     >
-                                        {uploading ? 'Uploading...' : 'Upload'}
+                                        {uploading ? 'Uploading…' : 'Apply'}
                                     </button>
-                                    <button 
+                                    <button
+                                        className="btn-cancel-photo"
                                         onClick={handleCancel}
-                                        className="cancel-btn"
                                         disabled={uploading}
                                     >
                                         Cancel
                                     </button>
                                 </div>
-                            </div>
-                        )}
-                    </div>
-                    
-                    <div className="info-section">
-                        <div className="info-header">
-                            <h3>Personal Information</h3>
-                            {!editMode && (
-                                <button onClick={handleEditClick} className="edit-info-btn">
-                                    Edit Profile
-                                </button>
                             )}
                         </div>
-                        
+
+                        <hr className="divider" />
+
+                        {/* View mode */}
                         {!editMode ? (
-                            <div className="info-display">
-                                <div className="info-row">
-                                    <strong>Name:</strong>
-                                    <span>{user?.firstName} {user?.lastName}</span>
-                                </div>
-                                <div className="info-row">
-                                    <strong>Email:</strong>
-                                    <span>{user?.email}</span>
-                                </div>
-                                <div className="info-row">
-                                    <strong>Phone:</strong>
-                                    <span>{user?.phoneNumber}</span>
-                                </div>
-                                {user?.dateOfBirth && (
-                                    <div className="info-row">
-                                        <strong>Date of Birth:</strong>
-                                        <span>{new Date(user.dateOfBirth).toLocaleDateString()}</span>
+                            <div className="view-section">
+                                <p className="section-label">Personal information</p>
+                                <div className="info-grid">
+                                    <div className="info-item">
+                                        <span className="info-key">First name</span>
+                                        <span className="info-val">{user?.firstName}</span>
                                     </div>
-                                )}
+                                    <div className="info-item">
+                                        <span className="info-key">Last name</span>
+                                        <span className="info-val">{user?.lastName}</span>
+                                    </div>
+                                    <div className="info-item">
+                                        <span className="info-key">Email</span>
+                                        <span className="info-val">{user?.email}</span>
+                                    </div>
+                                    <div className="info-item">
+                                        <span className="info-key">Phone</span>
+                                        <span className="info-val">{user?.phoneNumber}</span>
+                                    </div>
+                                    {user?.dateOfBirth && (
+                                        <div className="info-item full-width">
+                                            <span className="info-key">Date of birth</span>
+                                            <span className="info-val">
+                                                {new Date(user.dateOfBirth).toLocaleDateString('en-GB', {
+                                                    day: 'numeric', month: 'long', year: 'numeric'
+                                                })}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         ) : (
-                            <div className="info-edit">
-                                <div className="edit-field">
-                                    <label>First Name : </label>
-                                    <input
-                                        type="text"
-                                        name="firstName"
-                                        value={editData.firstName}
-                                        onChange={handleEditChange}
-                                        className="edit-input"
-                                        disabled={updating}
-                                    />
+                            /* Edit mode */
+                            <div className="edit-section">
+                                <p className="section-label">Edit information</p>
+                                <div className="edit-grid">
+                                    <div className="edit-row">
+                                        <label>First name</label>
+                                        <input
+                                            type="text"
+                                            name="firstName"
+                                            value={editData.firstName}
+                                            onChange={handleEditChange}
+                                            disabled={updating}
+                                        />
+                                    </div>
+                                    <div className="edit-row">
+                                        <label>Last name</label>
+                                        <input
+                                            type="text"
+                                            name="lastName"
+                                            value={editData.lastName}
+                                            onChange={handleEditChange}
+                                            disabled={updating}
+                                        />
+                                    </div>
                                 </div>
-                                <div className="edit-field">
-                                    <label>Last Name : </label>
-                                    <input
-                                        type="text"
-                                        name="lastName"
-                                        value={editData.lastName}
-                                        onChange={handleEditChange}
-                                        className="edit-input"
-                                        disabled={updating}
-                                    />
-                                </div>
-                                <div className="edit-field">
-                                    <label>Email : </label>
+                                <div className="edit-row">
+                                    <label>Email</label>
                                     <input
                                         type="email"
                                         name="email"
                                         value={editData.email}
                                         onChange={handleEditChange}
-                                        className="edit-input"
                                         disabled={updating}
                                     />
                                 </div>
-                                <div className="edit-field">
-                                    <label>Phone Number : </label>
+                                <div className="edit-row">
+                                    <label>Phone number</label>
                                     <input
                                         type="tel"
                                         name="phoneNumber"
                                         value={editData.phoneNumber}
                                         onChange={handleEditChange}
-                                        className="edit-input"
                                         disabled={updating}
                                     />
                                 </div>
-                                <div className="edit-field">
-                                    <label>Date of Birth : </label>
+                                <div className="edit-row">
+                                    <label>Date of birth</label>
                                     <input
                                         type="date"
                                         name="dateOfBirth"
                                         value={editData.dateOfBirth}
                                         onChange={handleEditChange}
-                                        className="edit-input"
                                         disabled={updating}
                                     />
                                 </div>
                                 <div className="edit-actions">
-                                    <button 
-                                        onClick={handleSave} 
-                                        className="save-btn"
-                                        disabled={updating}
-                                    >
-                                        {updating ? 'Saving...' : 'Save Changes'}
-                                    </button>
-                                    <button 
-                                        onClick={handleCancelEdit} 
-                                        className="cancel-edit-btn"
-                                        disabled={updating}
-                                    >
+                                    <button className="btn-cancel-edit" onClick={handleCancelEdit} disabled={updating}>
                                         Cancel
+                                    </button>
+                                    <button className="btn-save" onClick={handleSave} disabled={updating}>
+                                        {updating ? 'Saving…' : 'Save changes'}
                                     </button>
                                 </div>
                             </div>
                         )}
                     </div>
                 </div>
-                
+
                 {(uploading || updating) && (
                     <div className="loading-overlay">
-                        <div className="spinner"></div>
+                        <div className="spinner" />
                     </div>
                 )}
             </div>

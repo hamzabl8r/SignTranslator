@@ -58,8 +58,8 @@ const App = () => {
     
       <Toaster position="top-right" />
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Auth />} />
+        <Route path="/" element={<><Header /><Home /></>} />
+        <Route path="/login" element={<><Header /><Auth /></>} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
 
