@@ -290,6 +290,14 @@ export const userSlice = createSlice({
   name: "user",
   initialState,
   reducers: {
+    setAuthToken: (state, action) => {
+      state.token = action.payload || null;
+      if (action.payload) {
+        localStorage.setItem("token", action.payload);
+      } else {
+        localStorage.removeItem("token");
+      }
+    },
     logout: (state) => {
       state.user = null;
       state.token = null;
@@ -506,5 +514,5 @@ export const selectUser          = (state) => state.user.user;
 export const selectHistory       = (state) => state.user.history;
 export const selectHistoryStatus = (state) => state.user.status;
 
-export const { logout, clearMessage, clearHistory, clearActivity } = userSlice.actions;
+export const { setAuthToken, logout, clearMessage, clearHistory, clearActivity } = userSlice.actions;
 export default userSlice.reducer;

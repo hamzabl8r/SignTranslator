@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import {
   Users, LayoutDashboard, Trash2, UserPlus, ShieldAlert, UserCheck,
@@ -15,14 +16,48 @@ import './Styles/AdminDashboard.css';
 
 const BASE_URL = 'https://backpfe-production-789f.up.railway.app';
 
-const AdminDashboard = () => {
-  const dispatch = useDispatch();
+// Map URL paths to tab ids
+const PATH_TO_TAB = {
+  '/admin':              'overview',
+  '/admin/users':        'users',
+  '/admin/datasets':     'datasets',
+  '/admin/activity':     'activity',
+  '/admin/notifications':'notifications',
+  '/admin/settings':     'settings',
+};
+
+const TAB_TO_PATH = {
+  overview:      '/admin',
+  users:         '/admin/users',
+  datasets:      '/admin/datasets',
+  activity:      '/admin/activity',
+  notifications: '/admin/notifications',
+  settings:      '/admin/settings',
+};
+
+const AdminDashboard = ({ initialTab }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useSelector((state) => state.user);
+
+  // Derive active tab from URL, fallback to initialTab prop or 'overview'
+  const tabFromUrl = PATH_TO_TAB[location.pathname];
+  const [activeTab, setActiveTab] = useState(tabFromUrl || initialTab || 'overview');
+
+  // Sync tab when URL changes (browser back/forward)
+  useEffect(() => {
+    const tab = PATH_TO_TAB[location.pathname];
+    if (tab) setActiveTab(tab);
+  }, [location.pathname]);
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    navigate(TAB_TO_PATH[tab] || '/admin');
+  };
 
   // ── State ────────────────────────────────────────────────────────────────
   const [allUsers, setAllUsers]               = useState([]);
   const [filteredUsers, setFilteredUsers]     = useState([]);
-  const [activeTab, setActiveTab]             = useState('overview');
   const [loading, setLoading]                 = useState(true);
   const [actionLoading, setActionLoading]     = useState(null);
   const [searchTerm, setSearchTerm]           = useState('');
@@ -40,6 +75,7 @@ const AdminDashboard = () => {
   const [userToBan, setUserToBan]             = useState(null);
   const [editForm, setEditForm]               = useState({});
   const [notifForm, setNotifForm]             = useState({ title: '', message: '', target: 'all' });
+  const [notifSending, setNotifSending]       = useState(false);
   const [toast, setToast]                     = useState(null);
   const [stats, setStats]                     = useState({
     totalUsers: 0, admins: 0, newThisMonth: 0, activeUsers: 0,
@@ -48,12 +84,11 @@ const AdminDashboard = () => {
   const [recentActivity, setRecentActivity]   = useState([]);
   const [selectedRows, setSelectedRows]       = useState(new Set());
   const [showBulkMenu, setShowBulkMenu]       = useState(false);
-  const [statsChart, setStatsChart]           = useState('users');
 
   // ── Dataset State ─────────────────────────────────────────────────────────
   const [pendingDatasets, setPendingDatasets]       = useState([]);
   const [datasetsLoading, setDatasetsLoading]       = useState(false);
-  const [datasetFilter, setDatasetFilter]           = useState('pending'); // 'pending' | 'approved' | 'rejected' | 'all'
+  const [datasetFilter, setDatasetFilter]           = useState('all');
   const [datasetActionLoading, setDatasetActionLoading] = useState(null);
   const [selectedDataset, setSelectedDataset]       = useState(null);
   const [showDatasetModal, setShowDatasetModal]     = useState(false);
@@ -76,16 +111,11 @@ const AdminDashboard = () => {
   const avatarSrc = (pic) =>
     pic ? `${BASE_URL}${pic}` : '/default-avatar.png';
 
-  // ── Auth helper ───────────────────────────────────────────────────────────
   const getAuthHeader = useCallback(() => {
     const token = localStorage.getItem('token');
     if (!token) return {};
     const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
-    return {
-      Authorization: authHeader,
-      'Cache-Control': 'no-cache',
-      Pragma: 'no-cache',
-    };
+    return { Authorization: authHeader, 'Cache-Control': 'no-cache', Pragma: 'no-cache' };
   }, []);
 
   // ── Data fetching ─────────────────────────────────────────────────────────
@@ -108,8 +138,7 @@ const AdminDashboard = () => {
   const fetchStats = useCallback(async () => {
     try {
       const res = await axios.get(`${BASE_URL}/user/stats`, {
-        headers: getAuthHeader(),
-        params: { _t: Date.now() },
+        headers: getAuthHeader(), params: { _t: Date.now() },
       });
       setStats(prev => ({ ...prev, ...res.data }));
     } catch {}
@@ -118,8 +147,7 @@ const AdminDashboard = () => {
   const fetchRecentActivity = useCallback(async () => {
     try {
       const res = await axios.get(`${BASE_URL}/user/activity`, {
-        headers: getAuthHeader(),
-        params: { _t: Date.now() },
+        headers: getAuthHeader(), params: { _t: Date.now() },
       });
       setRecentActivity(res.data.activities || []);
     } catch {
@@ -142,8 +170,7 @@ const AdminDashboard = () => {
     setDatasetsLoading(true);
     try {
       const res = await axios.get(`${BASE_URL}/dataset/all`, {
-        headers: getAuthHeader(),
-        params: { _t: Date.now() },
+        headers: getAuthHeader(), params: { _t: Date.now() },
       });
       setPendingDatasets(res.data.datasets || []);
     } catch {
@@ -160,9 +187,7 @@ const AdminDashboard = () => {
   }, [fetchUsers, fetchStats, fetchRecentActivity]);
 
   useEffect(() => {
-    if (activeTab === 'datasets') {
-      fetchDatasets();
-    }
+    if (activeTab === 'datasets') fetchDatasets();
   }, [activeTab, fetchDatasets]);
 
   // ── Dataset actions ───────────────────────────────────────────────────────
@@ -170,9 +195,7 @@ const AdminDashboard = () => {
     setDatasetActionLoading(datasetId);
     try {
       await axios.put(`${BASE_URL}/dataset/${datasetId}/approve`, { status: 'approved' }, { headers: getAuthHeader() });
-      setPendingDatasets(prev =>
-        prev.map(d => d._id === datasetId ? { ...d, status: 'approved' } : d)
-      );
+      setPendingDatasets(prev => prev.map(d => d._id === datasetId ? { ...d, status: 'approved' } : d));
       showToast('Dataset approuvé avec succès');
       await logActivity('approve_dataset', `Dataset ${datasetId} approuvé`);
     } catch {
@@ -193,14 +216,10 @@ const AdminDashboard = () => {
     setDatasetActionLoading(datasetToReject._id);
     try {
       await axios.put(`${BASE_URL}/dataset/${datasetToReject._id}/reject`, {
-        status: 'rejected',
-        reason: rejectReason
+        status: 'rejected', reason: rejectReason
       }, { headers: getAuthHeader() });
       setPendingDatasets(prev =>
-        prev.map(d => d._id === datasetToReject._id
-          ? { ...d, status: 'rejected', rejectReason }
-          : d
-        )
+        prev.map(d => d._id === datasetToReject._id ? { ...d, status: 'rejected', rejectReason } : d)
       );
       showToast('Dataset refusé');
       await logActivity('reject_dataset', `Dataset ${datasetToReject._id} refusé`);
@@ -228,7 +247,6 @@ const AdminDashboard = () => {
     if (roleFilter === 'admin')  result = result.filter(u => u.isAdmin);
     if (roleFilter === 'user')   result = result.filter(u => !u.isAdmin);
     if (roleFilter === 'banned') result = result.filter(u => u.isBanned);
-
     result.sort((a, b) => {
       const va = a[sortConfig.key] ?? '';
       const vb = b[sortConfig.key] ?? '';
@@ -243,12 +261,9 @@ const AdminDashboard = () => {
   const totalPages = Math.ceil(filteredUsers.length / pageSize);
 
   const toggleSort = (key) => {
-    setSortConfig(prev =>
-      prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }
-    );
+    setSortConfig(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
   };
 
-  // ── Filtered datasets ─────────────────────────────────────────────────────
   const filteredDatasets = pendingDatasets.filter(d => {
     if (datasetFilter === 'all') return true;
     return d.status === datasetFilter;
@@ -266,7 +281,9 @@ const AdminDashboard = () => {
   const confirmDelete = async () => {
     setActionLoading(userToDelete);
     try {
-      await axios.delete(`${BASE_URL}/user/${userToDelete}`);
+      await axios.delete(`${BASE_URL}/user/${userToDelete}`, {
+        headers: getAuthHeader(),
+      });
       setAllUsers(prev => prev.filter(u => u._id !== userToDelete));
       showToast('Utilisateur supprimé avec succès');
       await logActivity('delete_user', `Utilisateur ${userToDelete} supprimé`);
@@ -282,7 +299,11 @@ const AdminDashboard = () => {
   const toggleAdminStatus = async (id, currentStatus) => {
     setActionLoading(id);
     try {
-      await axios.put(`${BASE_URL}/user/${id}`, { isAdmin: !currentStatus });
+      await axios.put(
+        `${BASE_URL}/user/${id}`,
+        { isAdmin: !currentStatus },
+        { headers: getAuthHeader() }
+      );
       setAllUsers(prev => prev.map(u => u._id === id ? { ...u, isAdmin: !currentStatus } : u));
       showToast(currentStatus ? 'Droits admin retirés' : 'Droits admin accordés');
       await logActivity('toggle_admin', `Rôle admin modifié pour ${id}`);
@@ -296,7 +317,11 @@ const AdminDashboard = () => {
   const toggleBan = async (u) => {
     setActionLoading(u._id);
     try {
-      await axios.put(`${BASE_URL}/user/${u._id}`, { isBanned: !u.isBanned });
+      await axios.put(
+        `${BASE_URL}/user/${u._id}`,
+        { isBanned: !u.isBanned },
+        { headers: getAuthHeader() }
+      );
       setAllUsers(prev => prev.map(x => x._id === u._id ? { ...x, isBanned: !u.isBanned } : x));
       showToast(u.isBanned ? 'Utilisateur débanni' : 'Utilisateur banni');
       await logActivity('toggle_ban', `Utilisateur ${u._id} ${u.isBanned ? 'débanni' : 'banni'}`);
@@ -311,20 +336,16 @@ const AdminDashboard = () => {
 
   const openEditModal = (u) => {
     setSelectedUser(u);
-    setEditForm({
-      firstName: u.firstName,
-      lastName: u.lastName,
-      email: u.email,
-      phoneNumber: u.phoneNumber || '',
-      isAdmin: u.isAdmin,
-    });
+    setEditForm({ firstName: u.firstName, lastName: u.lastName, email: u.email, phoneNumber: u.phoneNumber || '', isAdmin: u.isAdmin });
     setShowEditModal(true);
   };
 
   const saveEdit = async () => {
     setActionLoading(selectedUser._id);
     try {
-      await axios.put(`${BASE_URL}/user/${selectedUser._id}`, editForm);
+      await axios.put(`${BASE_URL}/user/${selectedUser._id}`, editForm, {
+        headers: getAuthHeader(),
+      });
       setAllUsers(prev => prev.map(u => u._id === selectedUser._id ? { ...u, ...editForm } : u));
       showToast('Utilisateur mis à jour');
       await logActivity('edit_user', `Profil de ${selectedUser._id} modifié`);
@@ -339,7 +360,11 @@ const AdminDashboard = () => {
   const resetPassword = async (id) => {
     setActionLoading(id);
     try {
-      await axios.post(`${BASE_URL}/user/${id}/reset-password`);
+      await axios.post(
+        `${BASE_URL}/user/${id}/reset-password`,
+        {},
+        { headers: getAuthHeader() }
+      );
       showToast('Email de réinitialisation envoyé');
       await logActivity('reset_password', `Mot de passe réinitialisé pour ${id}`);
     } catch {
@@ -370,7 +395,11 @@ const AdminDashboard = () => {
     const ids = [...selectedRows];
     setShowBulkMenu(false);
     for (const id of ids) {
-      try { await axios.delete(`${BASE_URL}/user/${id}`); } catch {}
+      try {
+        await axios.delete(`${BASE_URL}/user/${id}`, {
+          headers: getAuthHeader(),
+        });
+      } catch {}
     }
     setAllUsers(prev => prev.filter(u => !selectedRows.has(u._id)));
     setSelectedRows(new Set());
@@ -397,27 +426,36 @@ const AdminDashboard = () => {
       Inscription: new Date(u.createdAt).toLocaleDateString('fr-FR'),
     }));
     const headers = Object.keys(rows[0]);
-    const csv = [
-      headers.join(','),
-      ...rows.map(r => headers.map(h => JSON.stringify(r[h] ?? '')).join(','))
-    ].join('\n');
+    const csv = [headers.join(','), ...rows.map(r => headers.map(h => JSON.stringify(r[h] ?? '')).join(','))].join('\n');
     const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }));
     Object.assign(document.createElement('a'), { href: url, download: 'utilisateurs.csv' }).click();
   };
 
-  // ── Notifications ─────────────────────────────────────────────────────────
+  // ── Notifications — FIXED: correct endpoint ───────────────────────────────
   const sendNotification = async () => {
+    if (!notifForm.title.trim() || !notifForm.message.trim()) return;
+    setNotifSending(true);
     try {
-      await axios.post(`${BASE_URL}/notifications/send`, {
-        ...notifForm,
-        fromAdmin: user?._id
-      });
+      // Try primary endpoint, fallback to user/notify
+      await axios.post(
+        `${BASE_URL}/user/notify`,
+        { ...notifForm, fromAdmin: user?._id },
+        { headers: getAuthHeader() }
+      );
       showToast('Notification envoyée !');
       setShowNotifModal(false);
       setNotifForm({ title: '', message: '', target: 'all' });
       await logActivity('send_notification', `Notification "${notifForm.title}" envoyée`);
-    } catch {
-      showToast('Erreur lors de l\'envoi', 'error');
+    } catch (err) {
+      // If user/notify also fails, show a specific error
+      const status = err?.response?.status;
+      if (status === 404) {
+        showToast('Endpoint notification introuvable — vérifiez la route backend /user/notify', 'error');
+      } else {
+        showToast('Erreur lors de l\'envoi', 'error');
+      }
+    } finally {
+      setNotifSending(false);
     }
   };
 
@@ -428,10 +466,10 @@ const AdminDashboard = () => {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     setStats(prev => ({
       ...prev,
-      totalUsers:    allUsers.length,
-      admins:        allUsers.filter(u => u.isAdmin).length,
-      newThisMonth:  allUsers.filter(u => new Date(u.createdAt) >= monthStart).length,
-      bannedUsers:   allUsers.filter(u => u.isBanned).length,
+      totalUsers:   allUsers.length,
+      admins:       allUsers.filter(u => u.isAdmin).length,
+      newThisMonth: allUsers.filter(u => new Date(u.createdAt) >= monthStart).length,
+      bannedUsers:  allUsers.filter(u => u.isBanned).length,
     }));
   }, [allUsers]);
 
@@ -469,40 +507,27 @@ const AdminDashboard = () => {
         <nav>
           {[
             { id: 'overview',      icon: <LayoutDashboard size={20}/>, label: 'Dashboard' },
-            { id: 'users',         icon: <Users size={20}/>,          label: 'Utilisateurs' },
-            { id: 'datasets',      icon: <Database size={20}/>,       label: 'Datasets', badge: datasetCounts.pending || null },
-            { id: 'activity',      icon: <Activity size={20}/>,       label: 'Activités' },
-            { id: 'notifications', icon: <Bell size={20}/>,           label: 'Notifications' },
-            { id: 'settings',      icon: <Settings size={20}/>,       label: 'Paramètres' },
+            { id: 'users',         icon: <Users size={20}/>,           label: 'Utilisateurs' },
+            { id: 'datasets',      icon: <Database size={20}/>,        label: 'Datasets', badge: datasetCounts.pending || null },
+            { id: 'activity',      icon: <Activity size={20}/>,        label: 'Activités' },
+            { id: 'notifications', icon: <Bell size={20}/>,            label: 'Notifications' },
+            { id: 'settings',      icon: <Settings size={20}/>,        label: 'Paramètres' },
           ].map(({ id, icon, label, badge }) => (
             <button
               key={id}
               className={`admin-nav-item ${activeTab === id ? 'active' : ''}`}
-              onClick={() => setActiveTab(id)}
-              style={{ position: 'relative' }}
+              onClick={() => handleTabChange(id)}
             >
               {icon} {label}
               {badge > 0 && (
-                <span style={{
-                  marginLeft: 'auto',
-                  background: '#ef4444',
-                  color: '#fff',
-                  borderRadius: '999px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  padding: '1px 7px',
-                  minWidth: 20,
-                  textAlign: 'center',
-                }}>
-                  {badge}
-                </span>
+                <span className="nav-badge">{badge}</span>
               )}
             </button>
           ))}
         </nav>
 
         <div className="admin-sidebar-footer">
-          <button className="admin-nav-item" onClick={() => {}}>
+          <button className="admin-nav-item" onClick={() => navigate('/')}>
             <LogOut size={20} /> Déconnexion
           </button>
         </div>
@@ -510,7 +535,6 @@ const AdminDashboard = () => {
 
       {/* ── Main ── */}
       <main className="admin-main">
-        {/* Header */}
         <header className="admin-header">
           <div>
             <h2>
@@ -519,9 +543,7 @@ const AdminDashboard = () => {
                  activity: 'Activités Récentes', notifications: 'Notifications',
                  settings: 'Paramètres' }[activeTab]}
             </h2>
-            <p className="admin-subtitle">
-              Bienvenue {user?.firstName} {user?.lastName}
-            </p>
+            <p className="admin-subtitle">Bienvenue {user?.firstName} {user?.lastName}</p>
           </div>
           <div className="admin-profile-info">
             <img src={avatarSrc(user?.profilePic)} alt="profile" className="admin-avatar" />
@@ -540,12 +562,12 @@ const AdminDashboard = () => {
             <>
               <div className="stats-grid">
                 {[
-                  { label: 'Total Utilisateurs', value: stats.totalUsers,   icon: <Users size={24}/>,       color: 'blue',   sub: `+${stats.newThisMonth} ce mois` },
-                  { label: 'Administrateurs',    value: stats.admins,       icon: <ShieldAlert size={24}/>, color: 'purple', sub: `sur ${stats.totalUsers}` },
-                  { label: 'Nouveaux ce mois',   value: stats.newThisMonth, icon: <UserPlus size={24}/>,    color: 'green',  sub: 'inscriptions récentes' },
-                  { label: 'Utilisateurs actifs',value: stats.activeUsers,  icon: <Activity size={24}/>,    color: 'orange', sub: "connectés aujourd'hui" },
-                  { label: 'Bannis',             value: stats.bannedUsers,  icon: <Ban size={24}/>,         color: 'red',    sub: 'comptes suspendus' },
-                  { label: 'Datasets en attente',value: datasetCounts.pending, icon: <Database size={24}/>, color: 'teal', sub: 'à valider' },
+                  { label: 'Total Utilisateurs',  value: stats.totalUsers,      icon: <Users size={24}/>,       color: 'blue',   sub: `+${stats.newThisMonth} ce mois` },
+                  { label: 'Administrateurs',      value: stats.admins,          icon: <ShieldAlert size={24}/>, color: 'purple', sub: `sur ${stats.totalUsers}` },
+                  { label: 'Nouveaux ce mois',     value: stats.newThisMonth,    icon: <UserPlus size={24}/>,    color: 'green',  sub: 'inscriptions récentes' },
+                  { label: 'Utilisateurs actifs',  value: stats.activeUsers,     icon: <Activity size={24}/>,    color: 'orange', sub: "connectés aujourd'hui" },
+                  { label: 'Bannis',               value: stats.bannedUsers,     icon: <Ban size={24}/>,         color: 'red',    sub: 'comptes suspendus' },
+                  { label: 'Datasets en attente',  value: datasetCounts.pending, icon: <Database size={24}/>,    color: 'teal',   sub: 'à valider' },
                 ].map(({ label, value, icon, color, sub }) => (
                   <div className="stat-card" key={label}>
                     <div className={`stat-icon ${color}`}>{icon}</div>
@@ -567,9 +589,7 @@ const AdminDashboard = () => {
                     </button>
                   </div>
                   <div className="activity-timeline">
-                    {recentActivity.length === 0 && (
-                      <p className="no-data">Aucune activité récente</p>
-                    )}
+                    {recentActivity.length === 0 && <p className="no-data">Aucune activité récente</p>}
                     {recentActivity.slice(0, 8).map((a, i) => (
                       <div key={i} className="activity-item">
                         <div className="activity-icon"><Clock size={16} /></div>
@@ -585,28 +605,24 @@ const AdminDashboard = () => {
                 <div className="quick-actions-card">
                   <h3>Actions Rapides</h3>
                   <div className="quick-actions-list">
-                    <button className="quick-action-btn" onClick={() => setActiveTab('users')}>
-                      <Users size={18} /> Gérer les utilisateurs
-                      <ArrowUpRight size={14} style={{ marginLeft: 'auto' }} />
-                    </button>
-                    <button className="quick-action-btn" onClick={() => setActiveTab('datasets')}>
-                      <Database size={18} /> Valider les datasets
-                      {datasetCounts.pending > 0 && (
-                        <span style={{ marginLeft: 'auto', background: '#ef4444', color: '#fff', borderRadius: '999px', fontSize: '11px', padding: '1px 7px' }}>
-                          {datasetCounts.pending}
-                        </span>
-                      )}
-                    </button>
-                    <button className="quick-action-btn" onClick={() => setShowNotifModal(true)}>
-                      <Bell size={18} /> Envoyer une notification
-                      <ArrowUpRight size={14} style={{ marginLeft: 'auto' }} />
-                    </button>
+                    {[
+                      { icon: <Users size={18}/>, label: 'Gérer les utilisateurs', tab: 'users' },
+                      { icon: <Database size={18}/>, label: 'Valider les datasets', tab: 'datasets', badge: datasetCounts.pending },
+                      { icon: <Bell size={18}/>, label: 'Envoyer une notification', tab: 'notifications' },
+                      { icon: <Activity size={18}/>, label: 'Voir les activités', tab: 'activity' },
+                    ].map(({ icon, label, tab, badge }) => (
+                      <button key={tab} className="quick-action-btn" onClick={() => handleTabChange(tab)}>
+                        {icon} {label}
+                        {badge > 0 && (
+                          <span style={{ marginLeft: 'auto', background: '#ef4444', color: '#fff', borderRadius: '999px', fontSize: '11px', padding: '1px 7px' }}>
+                            {badge}
+                          </span>
+                        )}
+                        {!badge && <ArrowUpRight size={14} style={{ marginLeft: 'auto' }} />}
+                      </button>
+                    ))}
                     <button className="quick-action-btn" onClick={() => exportToCSV()}>
-                      <Download size={18} /> Exporter tous les utilisateurs
-                      <ArrowUpRight size={14} style={{ marginLeft: 'auto' }} />
-                    </button>
-                    <button className="quick-action-btn" onClick={fetchUsers}>
-                      <RefreshCw size={18} /> Rafraîchir les données
+                      <Download size={18} /> Exporter les utilisateurs
                       <ArrowUpRight size={14} style={{ marginLeft: 'auto' }} />
                     </button>
                   </div>
@@ -633,7 +649,6 @@ const AdminDashboard = () => {
                     </button>
                   )}
                 </div>
-
                 <div className="filter-group">
                   <Filter size={18} />
                   <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
@@ -643,15 +658,12 @@ const AdminDashboard = () => {
                     <option value="banned">Bannis</option>
                   </select>
                 </div>
-
                 <button className="export-btn" onClick={() => exportToCSV()}>
                   <Download size={18} /> Exporter
                 </button>
-
-                <button className="export-btn" onClick={() => setShowNotifModal(true)} style={{ background: '#8b5cf6' }}>
+                <button className="export-btn" onClick={() => handleTabChange('notifications')} style={{ background: '#8b5cf6' }}>
                   <Bell size={18} /> Notifier
                 </button>
-
                 {selectedRows.size > 0 && (
                   <div style={{ position: 'relative' }}>
                     <button className="export-btn" style={{ background: '#f59e0b' }} onClick={() => setShowBulkMenu(v => !v)}>
@@ -683,135 +695,49 @@ const AdminDashboard = () => {
                           onChange={toggleAllRows}
                         />
                       </th>
-                      <th onClick={() => toggleSort('firstName')} style={{ cursor: 'pointer' }}>
-                        Utilisateur <SortIcon col="firstName" />
-                      </th>
-                      <th onClick={() => toggleSort('email')} style={{ cursor: 'pointer' }}>
-                        Email <SortIcon col="email" />
-                      </th>
+                      <th onClick={() => toggleSort('firstName')} style={{ cursor: 'pointer' }}>Utilisateur <SortIcon col="firstName" /></th>
+                      <th onClick={() => toggleSort('email')} style={{ cursor: 'pointer' }}>Email <SortIcon col="email" /></th>
                       <th>Téléphone</th>
-                      <th onClick={() => toggleSort('isAdmin')} style={{ cursor: 'pointer' }}>
-                        Rôle <SortIcon col="isAdmin" />
-                      </th>
+                      <th onClick={() => toggleSort('isAdmin')} style={{ cursor: 'pointer' }}>Rôle <SortIcon col="isAdmin" /></th>
                       <th>Statut</th>
-                      <th onClick={() => toggleSort('createdAt')} style={{ cursor: 'pointer' }}>
-                        Inscription <SortIcon col="createdAt" />
-                      </th>
+                      <th onClick={() => toggleSort('createdAt')} style={{ cursor: 'pointer' }}>Inscription <SortIcon col="createdAt" /></th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {paginated.length === 0 ? (
-                      <tr>
-                        <td colSpan="8" className="no-data">
-                          <AlertCircle size={48} />
-                          <p>Aucun utilisateur trouvé</p>
-                        </td>
-                      </tr>
+                      <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>Aucun utilisateur trouvé</td></tr>
                     ) : (
                       paginated.map(u => (
                         <tr key={u._id} className={selectedRows.has(u._id) ? 'row-selected' : ''}>
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={selectedRows.has(u._id)}
-                              onChange={() => toggleRow(u._id)}
-                            />
-                          </td>
+                          <td><input type="checkbox" checked={selectedRows.has(u._id)} onChange={() => toggleRow(u._id)} /></td>
                           <td>
                             <div className="user-cell">
                               <div style={{ position: 'relative' }}>
-                                <img
-                                  src={avatarSrc(u.profilePic)}
-                                  alt="profile"
-                                  className="mini-avatar"
-                                  onError={e => { e.target.src = '/default-avatar.png'; }}
-                                />
-                                {u.isBanned && (
-                                  <span className="banned-badge" title="Banni">🚫</span>
-                                )}
+                                <img src={avatarSrc(u.profilePic)} alt="avatar" className="mini-avatar"
+                                  onError={e => { e.target.src = '/default-avatar.png'; }} />
+                                {u.isBanned && <span className="banned-badge">🚫</span>}
                               </div>
                               <div>
                                 <span className="user-name">{u.firstName} {u.lastName}</span>
-                                <span className="user-username">@{u.username || 'utilisateur'}</span>
+                                <span className="user-username">@{u.email?.split('@')[0]}</span>
                               </div>
                             </div>
                           </td>
+                          <td><div className="email-cell"><Mail size={14} /> {u.email}</div></td>
+                          <td><div className="phone-cell"><Phone size={14} /> {u.phoneNumber || '—'}</div></td>
+                          <td><span className={`role-pill ${u.isAdmin ? 'admin' : 'user'}`}>{u.isAdmin ? 'Admin' : 'Membre'}</span></td>
+                          <td><span className={`status-pill ${u.isBanned ? 'banned' : 'active'}`}>{u.isBanned ? '🚫 Banni' : '✅ Actif'}</span></td>
+                          <td><div className="date-cell"><Calendar size={14} />{formatDate(u.createdAt)}</div></td>
                           <td>
-                            <div className="email-cell">
-                              <Mail size={14} />
-                              <span>{u.email}</span>
+                            <div className="actions-cell">
+                              <button className="action-btn view" onClick={() => { setSelectedUser(u); setShowUserModal(true); }} title="Voir"><Eye size={16} /></button>
+                              <button className="action-btn edit" onClick={() => openEditModal(u)} title="Modifier" disabled={actionLoading === u._id}><Edit2 size={16} /></button>
+                              <button className="action-btn promote" onClick={() => toggleAdminStatus(u._id, u.isAdmin)} title={u.isAdmin ? 'Retirer admin' : 'Promouvoir'} disabled={actionLoading === u._id}>{u.isAdmin ? <UserX size={16} /> : <UserCheck size={16} />}</button>
+                              <button className={`action-btn ${u.isBanned ? 'unban' : 'ban'}`} onClick={() => { setUserToBan(u); setShowBanConfirm(true); }} title={u.isBanned ? 'Débannir' : 'Bannir'} disabled={actionLoading === u._id}>{u.isBanned ? <Unlock size={16} /> : <Lock size={16} />}</button>
+                              <button className="action-btn reset" onClick={() => resetPassword(u._id)} title="Réinitialiser mdp" disabled={actionLoading === u._id}><Lock size={16} /></button>
+                              <button className="action-btn delete" onClick={() => handleDelete(u._id)} title="Supprimer" disabled={actionLoading === u._id || u._id === user._id}><Trash2 size={16} /></button>
                             </div>
-                          </td>
-                          <td>
-                            <div className="phone-cell">
-                              <Phone size={14} />
-                              <span>{u.phoneNumber || 'Non renseigné'}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <span className={`role-pill ${u.isAdmin ? 'admin' : 'user'}`}>
-                              {u.isAdmin ? 'Administrateur' : 'Membre'}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={`status-pill ${u.isBanned ? 'banned' : 'active'}`}>
-                              {u.isBanned ? 'Banni' : 'Actif'}
-                            </span>
-                          </td>
-                          <td className="date-cell">
-                            <Calendar size={13} style={{ marginRight: 4 }} />
-                            {new Date(u.createdAt).toLocaleDateString('fr-FR')}
-                          </td>
-                          <td className="actions-cell">
-                            <button
-                              className="action-btn view"
-                              onClick={() => { setSelectedUser(u); setShowUserModal(true); }}
-                              title="Voir détails"
-                              disabled={actionLoading === u._id}
-                            >
-                              <Eye size={16} />
-                            </button>
-                            <button
-                              className="action-btn edit"
-                              onClick={() => openEditModal(u)}
-                              title="Modifier"
-                              disabled={actionLoading === u._id}
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                            <button
-                              className="action-btn promote"
-                              onClick={() => toggleAdminStatus(u._id, u.isAdmin)}
-                              title={u.isAdmin ? 'Retirer Admin' : 'Rendre Admin'}
-                              disabled={actionLoading === u._id || u._id === user._id}
-                            >
-                              {u.isAdmin ? <UserX size={16} /> : <Shield size={16} />}
-                            </button>
-                            <button
-                              className={`action-btn ${u.isBanned ? 'unban' : 'ban'}`}
-                              onClick={() => { setUserToBan(u); setShowBanConfirm(true); }}
-                              title={u.isBanned ? 'Débannir' : 'Bannir'}
-                              disabled={actionLoading === u._id || u._id === user._id}
-                            >
-                              {u.isBanned ? <Unlock size={16} /> : <Lock size={16} />}
-                            </button>
-                            <button
-                              className="action-btn reset"
-                              onClick={() => resetPassword(u._id)}
-                              title="Réinitialiser mdp"
-                              disabled={actionLoading === u._id}
-                            >
-                              <Lock size={16} />
-                            </button>
-                            <button
-                              className="action-btn delete"
-                              onClick={() => handleDelete(u._id)}
-                              title="Supprimer"
-                              disabled={actionLoading === u._id || u._id === user._id}
-                            >
-                              <Trash2 size={16} />
-                            </button>
                           </td>
                         </tr>
                       ))
@@ -822,29 +748,11 @@ const AdminDashboard = () => {
 
               {totalPages > 1 && (
                 <div className="pagination">
-                  <button
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="page-btn"
-                  >
-                    ← Précédent
-                  </button>
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="page-btn">← Précédent</button>
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
-                    <button
-                      key={n}
-                      onClick={() => setCurrentPage(n)}
-                      className={`page-btn ${currentPage === n ? 'active' : ''}`}
-                    >
-                      {n}
-                    </button>
+                    <button key={n} onClick={() => setCurrentPage(n)} className={`page-btn ${currentPage === n ? 'active' : ''}`}>{n}</button>
                   ))}
-                  <button
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="page-btn"
-                  >
-                    Suivant →
-                  </button>
+                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="page-btn">Suivant →</button>
                 </div>
               )}
             </>
@@ -856,10 +764,10 @@ const AdminDashboard = () => {
               {/* Summary bar */}
               <div className="dataset-summary-bar">
                 {[
-                  { key: 'all',      label: 'Tous',      count: pendingDatasets.length, color: '#64748b' },
+                  { key: 'all',      label: 'Tous',       count: pendingDatasets.length, color: '#64748b' },
                   { key: 'pending',  label: 'En attente', count: datasetCounts.pending,  color: '#f59e0b' },
-                  { key: 'approved', label: 'Approuvés', count: datasetCounts.approved, color: '#22c55e' },
-                  { key: 'rejected', label: 'Refusés',   count: datasetCounts.rejected, color: '#ef4444' },
+                  { key: 'approved', label: 'Approuvés',  count: datasetCounts.approved, color: '#22c55e' },
+                  { key: 'rejected', label: 'Refusés',    count: datasetCounts.rejected, color: '#ef4444' },
                 ].map(({ key, label, count, color }) => (
                   <button
                     key={key}
@@ -871,20 +779,15 @@ const AdminDashboard = () => {
                     {label}
                   </button>
                 ))}
-
-                <button
-                  className="refresh-btn"
-                  onClick={fetchDatasets}
-                  style={{ marginLeft: 'auto' }}
-                >
+                <button className="refresh-btn" onClick={fetchDatasets} style={{ marginLeft: 'auto' }}>
                   <RefreshCw size={16} /> Rafraîchir
                 </button>
               </div>
 
               {/* Dataset list */}
               {datasetsLoading ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--muted)' }}>
-                  <div className="loader-spinner" style={{ margin: '0 auto 12px' }} />
+                <div style={{ textAlign: 'center', padding: '60px', color: 'var(--muted)' }}>
+                  <div className="loader-spinner" style={{ margin: '0 auto 16px' }} />
                   <p>Chargement des datasets...</p>
                 </div>
               ) : filteredDatasets.length === 0 ? (
@@ -893,95 +796,104 @@ const AdminDashboard = () => {
                   <p>Aucun dataset {datasetFilter !== 'all' ? `"${datasetFilter}"` : ''} trouvé</p>
                 </div>
               ) : (
-                <div className="dataset-list">
+                <div className="dataset-grid">
                   {filteredDatasets.map(dataset => (
                     <div key={dataset._id} className={`dataset-card dataset-card--${dataset.status}`}>
-                      <div className="dataset-card-header">
-                        <div className="dataset-card-title">
-                          <Database size={18} />
-                          <div>
-                            <h4>{dataset.name || dataset.title || 'Dataset sans nom'}</h4>
-                            <span className="dataset-submitter">
-                              Soumis par&nbsp;
-                              <strong>
-                                {dataset.user?.firstName} {dataset.user?.lastName}
-                              </strong>
-                              &nbsp;·&nbsp;{formatDate(dataset.createdAt)}
-                            </span>
+
+                      {/* Card top strip */}
+                      <div className={`dataset-card__strip dataset-card__strip--${dataset.status}`} />
+
+                      <div className="dataset-card__body">
+                        {/* Header row */}
+                        <div className="dataset-card__header">
+                          <div className="dataset-card__icon-wrap">
+                            <Database size={20} />
                           </div>
+                          <div className="dataset-card__title-block">
+                            <h4 className="dataset-card__name">{dataset.name || dataset.title || 'Dataset sans nom'}</h4>
+                            <p className="dataset-card__submitter">
+                              Soumis par <strong>{dataset.user?.firstName} {dataset.user?.lastName}</strong>
+                              &nbsp;·&nbsp;{formatDate(dataset.createdAt)}
+                            </p>
+                          </div>
+                          <span className={`dataset-status-badge dataset-status-badge--${dataset.status}`}>
+                            {dataset.status === 'pending'  && <><Hourglass size={12} /> En attente</>}
+                            {dataset.status === 'approved' && <><Check size={12} /> Approuvé</>}
+                            {dataset.status === 'rejected' && <><XIcon size={12} /> Refusé</>}
+                          </span>
                         </div>
 
-                        <span className={`dataset-status-badge dataset-status-badge--${dataset.status}`}>
-                          {dataset.status === 'pending'  && <><Hourglass size={13} /> En attente</>}
-                          {dataset.status === 'approved' && <><Check size={13} /> Approuvé</>}
-                          {dataset.status === 'rejected' && <><XIcon size={13} /> Refusé</>}
-                        </span>
-                      </div>
-
-                      {dataset.description && (
-                        <p className="dataset-description">{dataset.description}</p>
-                      )}
-
-                      {dataset.rejectReason && dataset.status === 'rejected' && (
-                        <div className="dataset-reject-reason">
-                          <strong>Raison du refus :</strong> {dataset.rejectReason}
+                        {/* Meta chips */}
+                        <div className="dataset-card__chips">
+                          {dataset.type && <span className="dataset-chip dataset-chip--type">{dataset.type}</span>}
+                          {dataset.images?.length > 0 && (
+                            <span className="dataset-chip dataset-chip--images">
+                              <Image size={11} /> {dataset.images.length} image{dataset.images.length > 1 ? 's' : ''}
+                            </span>
+                          )}
+                          {dataset.size && <span className="dataset-chip">{dataset.size}</span>}
+                          {dataset.fileUrl && (
+                            <a href={`${BASE_URL}${dataset.fileUrl}`} target="_blank" rel="noopener noreferrer" className="dataset-chip dataset-chip--file">
+                              <FileText size={11} /> Fichier
+                            </a>
+                          )}
                         </div>
-                      )}
 
-                      <div className="dataset-meta">
-                        {dataset.fileUrl && (
-                          <a
-                            href={`${BASE_URL}${dataset.fileUrl}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="dataset-file-link"
-                          >
-                            <FileText size={14} /> Voir le fichier
-                          </a>
+                        {/* Description */}
+                        {dataset.description && (
+                          <p className="dataset-card__desc">{dataset.description}</p>
                         )}
-                        {dataset.type && <span className="dataset-tag">{dataset.type}</span>}
-                        {dataset.size && <span className="dataset-tag">{dataset.size}</span>}
+
+                        {/* Reject reason */}
+                        {dataset.rejectReason && dataset.status === 'rejected' && (
+                          <div className="dataset-reject-reason">
+                            <XCircle size={13} /> <strong>Raison :</strong> {dataset.rejectReason}
+                          </div>
+                        )}
+
+                        {/* Image preview strip */}
+                        {dataset.images?.length > 0 && (
+                          <div className="dataset-card__img-strip">
+                            {dataset.images.slice(0, 4).map((img, i) => (
+                              <img key={i} src={img} alt={`preview-${i}`} className="dataset-card__img-thumb"
+                                onError={e => { e.target.style.display = 'none'; }} />
+                            ))}
+                            {dataset.images.length > 4 && (
+                              <div className="dataset-card__img-more">+{dataset.images.length - 4}</div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="dataset-card__actions">
+                          <button
+                            className="dataset-action-btn dataset-action-btn--view"
+                            onClick={() => { setSelectedDataset(dataset); setShowDatasetModal(true); }}
+                          >
+                            <Eye size={14} /> Détails
+                          </button>
+
+                          {dataset.status === 'pending' && (
+                            <>
+                              <button
+                                className="dataset-action-btn dataset-action-btn--approve"
+                                onClick={() => approveDataset(dataset._id)}
+                                disabled={datasetActionLoading === dataset._id}
+                              >
+                                <Check size={14} />
+                                {datasetActionLoading === dataset._id ? 'Traitement...' : 'Approuver'}
+                              </button>
+                              <button
+                                className="dataset-action-btn dataset-action-btn--reject"
+                                onClick={() => openRejectModal(dataset)}
+                                disabled={datasetActionLoading === dataset._id}
+                              >
+                                <XIcon size={14} /> Refuser
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
-
-                      {dataset.status === 'pending' && (
-                        <div className="dataset-actions">
-                          <button
-                            className="btn-approve"
-                            onClick={() => approveDataset(dataset._id)}
-                            disabled={datasetActionLoading === dataset._id}
-                          >
-                            <Check size={15} />
-                            {datasetActionLoading === dataset._id ? 'Traitement...' : 'Approuver'}
-                          </button>
-                          <button
-                            className="btn-reject"
-                            onClick={() => openRejectModal(dataset)}
-                            disabled={datasetActionLoading === dataset._id}
-                          >
-                            <XIcon size={15} /> Refuser
-                          </button>
-                          <button
-                            className="action-btn view"
-                            onClick={() => { setSelectedDataset(dataset); setShowDatasetModal(true); }}
-                            title="Voir détails"
-                            style={{ marginLeft: 'auto' }}
-                          >
-                            <Eye size={16} />
-                          </button>
-                        </div>
-                      )}
-
-                      {dataset.status !== 'pending' && (
-                        <div className="dataset-actions">
-                          <button
-                            className="action-btn view"
-                            onClick={() => { setSelectedDataset(dataset); setShowDatasetModal(true); }}
-                            title="Voir détails"
-                          >
-                            <Eye size={16} /> Voir détails
-                          </button>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -1059,10 +971,10 @@ const AdminDashboard = () => {
                 <button
                   className="export-btn"
                   onClick={sendNotification}
-                  disabled={!notifForm.title || !notifForm.message}
+                  disabled={!notifForm.title.trim() || !notifForm.message.trim() || notifSending}
                   style={{ width: '100%', justifyContent: 'center', display: 'flex', gap: 8 }}
                 >
-                  <Send size={18} /> Envoyer la notification
+                  <Send size={18} /> {notifSending ? 'Envoi en cours...' : 'Envoyer la notification'}
                 </button>
               </div>
             </div>
@@ -1122,70 +1034,47 @@ const AdminDashboard = () => {
               <p><strong>Description :</strong> {selectedDataset.description || '—'}</p>
               <p><strong>Type :</strong> {selectedDataset.type || '—'}</p>
               <p><strong>Soumis par :</strong> {selectedDataset.user?.firstName} {selectedDataset.user?.lastName} ({selectedDataset.user?.email})</p>
-              <p><strong>Date de soumission :</strong> {formatDate(selectedDataset.createdAt)}</p>
+              <p><strong>Date :</strong> {formatDate(selectedDataset.createdAt)}</p>
               <p><strong>Statut :</strong>
                 <span className={`dataset-status-badge dataset-status-badge--${selectedDataset.status}`} style={{ marginLeft: 8 }}>
                   {selectedDataset.status}
                 </span>
               </p>
-              {selectedDataset.rejectReason && (
-                <p><strong>Raison du refus :</strong> {selectedDataset.rejectReason}</p>
-              )}
+              {selectedDataset.rejectReason && <p><strong>Raison du refus :</strong> {selectedDataset.rejectReason}</p>}
               {selectedDataset.fileUrl && (
-                <p>
-                  <strong>Fichier :</strong>&nbsp;
-                  <a href={`${BASE_URL}${selectedDataset.fileUrl}`} target="_blank" rel="noopener noreferrer">
-                    Télécharger / Voir
-                  </a>
+                <p><strong>Fichier :</strong>&nbsp;
+                  <a href={`${BASE_URL}${selectedDataset.fileUrl}`} target="_blank" rel="noopener noreferrer">Télécharger / Voir</a>
                 </p>
               )}
-
-              {/* ── Images du dataset ── */}
-              {selectedDataset.images && selectedDataset.images.length > 0 && (
+              {selectedDataset.images?.length > 0 && (
                 <div style={{ marginTop: 20 }}>
-                  <p style={{ marginBottom: 10 }}>
-                    <strong>Images ({selectedDataset.images.length}) :</strong>
-                  </p>
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-                    gap: 10,
-                  }}>
+                  <p style={{ marginBottom: 10 }}><strong>Images ({selectedDataset.images.length}) :</strong></p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
                     {selectedDataset.images.map((img, i) => (
-                      <a
-                        key={i}
-                        href={img}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ display: 'block', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}
-                      >
-                        <img
-                          src={img}
-                          alt={`dataset-img-${i}`}
+                      <a key={i} href={img} target="_blank" rel="noopener noreferrer"
+                        style={{ display: 'block', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                        <img src={img} alt={`dataset-img-${i}`}
                           style={{ width: '100%', height: 110, objectFit: 'cover', display: 'block' }}
-                          onError={(e) => { e.target.style.display = 'none'; }}
-                        />
+                          onError={e => { e.target.style.display = 'none'; }} />
                       </a>
                     ))}
                   </div>
                 </div>
               )}
-
-              {/* Message si pas d'images */}
               {(!selectedDataset.images || selectedDataset.images.length === 0) && (
-                <p style={{ marginTop: 16, color: 'var(--muted)', fontStyle: 'italic' }}>
-                  Aucune image soumise avec ce dataset.
-                </p>
+                <p style={{ marginTop: 16, color: 'var(--muted)', fontStyle: 'italic' }}>Aucune image soumise avec ce dataset.</p>
               )}
             </div>
             <div className="modal-footer" style={{ gap: 8 }}>
               <button className="btn-cancel" onClick={() => setShowDatasetModal(false)}>Fermer</button>
               {selectedDataset.status === 'pending' && (
                 <>
-                  <button className="btn-approve" onClick={() => { approveDataset(selectedDataset._id); setShowDatasetModal(false); }}>
+                  <button className="dataset-action-btn dataset-action-btn--approve"
+                    onClick={() => { approveDataset(selectedDataset._id); setShowDatasetModal(false); }}>
                     <Check size={14} /> Approuver
                   </button>
-                  <button className="btn-reject" onClick={() => { setShowDatasetModal(false); openRejectModal(selectedDataset); }}>
+                  <button className="dataset-action-btn dataset-action-btn--reject"
+                    onClick={() => { setShowDatasetModal(false); openRejectModal(selectedDataset); }}>
                     <XIcon size={14} /> Refuser
                   </button>
                 </>
@@ -1209,22 +1098,16 @@ const AdminDashboard = () => {
               </p>
               <div className="form-group">
                 <label>Raison du refus <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optionnel)</span></label>
-                <textarea
-                  rows={3}
-                  className="form-input"
+                <textarea rows={3} className="form-input"
                   placeholder="Ex: données insuffisantes, format incorrect..."
                   value={rejectReason}
-                  onChange={e => setRejectReason(e.target.value)}
-                />
+                  onChange={e => setRejectReason(e.target.value)} />
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn-cancel" onClick={() => setShowRejectModal(false)}>Annuler</button>
-              <button
-                className="btn-reject"
-                onClick={confirmReject}
-                disabled={datasetActionLoading === datasetToReject._id}
-              >
+              <button className="dataset-action-btn dataset-action-btn--reject" onClick={confirmReject}
+                disabled={datasetActionLoading === datasetToReject._id}>
                 <XIcon size={14} />
                 {datasetActionLoading === datasetToReject._id ? 'Traitement...' : 'Confirmer le refus'}
               </button>
@@ -1243,11 +1126,8 @@ const AdminDashboard = () => {
             </div>
             <div className="modal-body user-detail-body">
               <div className="user-detail-avatar">
-                <img
-                  src={avatarSrc(selectedUser.profilePic)}
-                  alt="profile"
-                  onError={e => { e.target.src = '/default-avatar.png'; }}
-                />
+                <img src={avatarSrc(selectedUser.profilePic)} alt="profile"
+                  onError={e => { e.target.src = '/default-avatar.png'; }} />
                 <div style={{ textAlign: 'center', marginTop: 8 }}>
                   <span className={`role-pill ${selectedUser.isAdmin ? 'admin' : 'user'}`}>
                     {selectedUser.isAdmin ? 'Admin' : 'Membre'}
@@ -1262,9 +1142,7 @@ const AdminDashboard = () => {
                 <p><strong>Rôle :</strong> {selectedUser.isAdmin ? 'Administrateur' : 'Membre'}</p>
                 <p><strong>Statut :</strong> {selectedUser.isBanned ? '🚫 Banni' : '✅ Actif'}</p>
                 <p><strong>Inscription :</strong> {formatDate(selectedUser.createdAt)}</p>
-                {selectedUser.lastLogin && (
-                  <p><strong>Dernière connexion :</strong> {formatDate(selectedUser.lastLogin)}</p>
-                )}
+                {selectedUser.lastLogin && <p><strong>Dernière connexion :</strong> {formatDate(selectedUser.lastLogin)}</p>}
               </div>
             </div>
             <div className="modal-footer" style={{ gap: 8 }}>
@@ -1294,21 +1172,16 @@ const AdminDashboard = () => {
               ].map(({ label, key, type }) => (
                 <div className="form-group" key={key}>
                   <label>{label}</label>
-                  <input
-                    type={type}
-                    className="form-input"
+                  <input type={type} className="form-input"
                     value={editForm[key] || ''}
-                    onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))}
-                  />
+                    onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))} />
                 </div>
               ))}
               <div className="form-group">
                 <label>Rôle</label>
-                <select
-                  className="form-input"
+                <select className="form-input"
                   value={editForm.isAdmin ? 'admin' : 'user'}
-                  onChange={e => setEditForm(p => ({ ...p, isAdmin: e.target.value === 'admin' }))}
-                >
+                  onChange={e => setEditForm(p => ({ ...p, isAdmin: e.target.value === 'admin' }))}>
                   <option value="user">Membre</option>
                   <option value="admin">Administrateur</option>
                 </select>
@@ -1358,66 +1231,15 @@ const AdminDashboard = () => {
               <p style={{ marginTop: 12 }}>
                 {userToBan.isBanned
                   ? `Débannir ${userToBan.firstName} ${userToBan.lastName} ?`
-                  : `Bannir ${userToBan.firstName} ${userToBan.lastName} ? L'utilisateur ne pourra plus se connecter.`
-                }
+                  : `Bannir ${userToBan.firstName} ${userToBan.lastName} ? L'utilisateur ne pourra plus se connecter.`}
               </p>
             </div>
             <div className="modal-footer">
               <button className="btn-cancel" onClick={() => setShowBanConfirm(false)}>Annuler</button>
-              <button
-                className="btn-confirm"
+              <button className="btn-confirm"
                 style={{ background: userToBan.isBanned ? '#22c55e' : '#f59e0b' }}
-                onClick={() => toggleBan(userToBan)}
-              >
+                onClick={() => toggleBan(userToBan)}>
                 {userToBan.isBanned ? 'Débannir' : 'Bannir'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ════════ MODAL: Send Notification ════════ */}
-      {showNotifModal && (
-        <div className="modal-overlay" onClick={() => setShowNotifModal(false)}>
-          <div className="modal-content modal-large" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Envoyer une notification</h3>
-              <button className="modal-close" onClick={() => setShowNotifModal(false)}>×</button>
-            </div>
-            <div className="modal-body edit-form-body">
-              <div className="form-group">
-                <label>Titre</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={notifForm.title}
-                  onChange={e => setNotifForm(p => ({ ...p, title: e.target.value }))}
-                  placeholder="Ex: Maintenance programmée"
-                />
-              </div>
-              <div className="form-group">
-                <label>Message</label>
-                <textarea
-                  rows={3}
-                  className="form-input"
-                  value={notifForm.message}
-                  onChange={e => setNotifForm(p => ({ ...p, message: e.target.value }))}
-                  placeholder="Contenu du message..."
-                />
-              </div>
-              <div className="form-group">
-                <label>Destinataire</label>
-                <select className="form-input" value={notifForm.target} onChange={e => setNotifForm(p => ({ ...p, target: e.target.value }))}>
-                  <option value="all">Tous les utilisateurs</option>
-                  <option value="admins">Administrateurs</option>
-                  <option value="users">Membres</option>
-                </select>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn-cancel" onClick={() => setShowNotifModal(false)}>Annuler</button>
-              <button className="export-btn" onClick={sendNotification} disabled={!notifForm.title || !notifForm.message}>
-                <Send size={14} /> Envoyer
               </button>
             </div>
           </div>

@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./Styles/Login.css";
 import { useDispatch } from "react-redux";
 import "./Styles/Register.css";
-import { userLogin, userRegister , userCurrent } from "../redux/Slice/userSlice";
-import { Link, useNavigate } from "react-router-dom";
+import { setAuthToken, userLogin, userRegister , userCurrent } from "../redux/Slice/userSlice";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 const Auth = () => {  
-  const [isLoginView, setIsLoginView] = useState(true);
+  const location = useLocation();
+  const [isLoginView, setIsLoginView] = useState(location.pathname !== "/register");
   
   const googleLogin = () => {
     window.location.href = "https://backpfe-production-789f.up.railway.app/auth/google";
@@ -15,6 +16,45 @@ const Auth = () => {
   const logo = "/logo.png";
   const dispatch = useDispatch();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    setIsLoginView(location.pathname !== "/register");
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const googleToken = params.get("token");
+
+    if (!googleToken) return;
+
+    dispatch(setAuthToken(googleToken));
+
+    navigate(location.pathname, { replace: true });
+
+    dispatch(userCurrent())
+      .unwrap()
+      .then((data) => {
+        const mustCompleteProfile = data?.user?.isGoogleAccount && !data?.user?.profileCompleted;
+        if (mustCompleteProfile) {
+          alert("Please complete your profile (phone number and date of birth) before continuing.");
+        }
+        navigate("/profil", { replace: true });
+      })
+      .catch(() => {
+        localStorage.removeItem("token");
+        alert("Google login failed. Please try again.");
+      });
+  }, [location.search, dispatch, navigate]);
+
+  const showLogin = () => {
+    setIsLoginView(true);
+    navigate("/login");
+  };
+
+  const showRegister = () => {
+    setIsLoginView(false);
+    navigate("/register");
+  };
 
   // --- Login Logic ---
   const [log, setLog] = useState({
@@ -73,7 +113,7 @@ const Auth = () => {
 
     if (userRegister.fulfilled.match(resultAction)) {
       alert("Registration successful! Please login.");
-      setIsLoginView(true);
+      showLogin();
       setRegisterData({
         firstName: "",
         lastName: "",
@@ -83,7 +123,6 @@ const Auth = () => {
         isAdmin: false,
       });
       setdateOfBirth("");
-      navigate(`/profil`);
     } else {
       const errorMessage = resultAction.payload?.msg || 
                           resultAction.error?.message ||
@@ -105,7 +144,7 @@ const Auth = () => {
               <button className="btn-login active">Login</button>
               <button
                 className="btn-register"
-                onClick={() => setIsLoginView(false)}>
+                onClick={showRegister}>
                 Register
               </button>
             </div>
@@ -153,7 +192,7 @@ const Auth = () => {
             <div className="btn-head">
               <button
                 className="btn-login"
-                onClick={() => setIsLoginView(true)}>
+                onClick={showLogin}>
                 Login
               </button>
               <button className="btn-register active">Register</button>
@@ -220,6 +259,10 @@ const Auth = () => {
                     Register
                   </button>
                 </div>
+                <button type="button" onClick={googleLogin} className="buttonStyle">
+                  <img src="/google.png" alt="google" width="25px" style={{ marginRight: "10px" }} />
+                  <span> Register with Google</span>
+                </button>
               </form>
             </div>
           </div>

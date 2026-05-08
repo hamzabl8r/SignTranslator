@@ -50,16 +50,17 @@ const App = () => {
   }
 
   return (
-    <BrowserRouter 
-    future={{
-      v7_startTransition: true,
-      v7_relativeSplatPath: true,
-    }}>
-    
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <Toaster position="top-right" />
       <Routes>
-        <Route path="/" element={<><Header /><Home /></>} />
-        <Route path="/login" element={<><Header /><Auth /></>} />
+        <Route path="/" element={<><Home /></>} />
+        <Route path="/login" element={<><Auth /></>} />
+        <Route path="/register" element={<><Auth /></>} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
 
@@ -67,11 +68,16 @@ const App = () => {
           <Route path="/translator" element={<><Header /><Translator /></>} />
           <Route path="/history" element={<><Header /><History /></>} />
           <Route path="/profil" element={<><Header /><Profil /></>} />
-          <Route path="/admin" element={<><Header /><AdminDashboard /></>} />
-
-        
           <Route path="/chat" element={<><Header /><Chat /></>} />
           <Route path="/chat/:userId" element={<><Header /><Chat /></>} />
+
+          {/* Admin routes — all render AdminDashboard with tab driven by URL */}
+          <Route path="/admin" element={<><Header /><AdminDashboard /></>} />
+          <Route path="/admin/users" element={<><Header /><AdminDashboard initialTab="users" /></>} />
+          <Route path="/admin/datasets" element={<><Header /><AdminDashboard initialTab="datasets" /></>} />
+          <Route path="/admin/activity" element={<><Header /><AdminDashboard initialTab="activity" /></>} />
+          <Route path="/admin/notifications" element={<><Header /><AdminDashboard initialTab="notifications" /></>} />
+          <Route path="/admin/settings" element={<><Header /><AdminDashboard initialTab="settings" /></>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" />} />
