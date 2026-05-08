@@ -431,12 +431,11 @@ const AdminDashboard = ({ initialTab }) => {
     Object.assign(document.createElement('a'), { href: url, download: 'utilisateurs.csv' }).click();
   };
 
-  // ── Notifications — FIXED: correct endpoint ───────────────────────────────
+  // ── Notifications ──────────────────────────────────────────────────────────
   const sendNotification = async () => {
     if (!notifForm.title.trim() || !notifForm.message.trim()) return;
     setNotifSending(true);
     try {
-      // Try primary endpoint, fallback to user/notify
       await axios.post(
         `${BASE_URL}/user/notify`,
         { ...notifForm, fromAdmin: user?._id },
@@ -447,7 +446,6 @@ const AdminDashboard = ({ initialTab }) => {
       setNotifForm({ title: '', message: '', target: 'all' });
       await logActivity('send_notification', `Notification "${notifForm.title}" envoyée`);
     } catch (err) {
-      // If user/notify also fails, show a specific error
       const status = err?.response?.status;
       if (status === 404) {
         showToast('Endpoint notification introuvable — vérifiez la route backend /user/notify', 'error');
