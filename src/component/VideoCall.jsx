@@ -60,7 +60,6 @@ const VideoCall = ({
   const callTimeoutRef = useRef(null);
   const callStatusRef = useRef(initialIncomingCall ? 'ringing' : 'idle');
 
-  // Fix duplicate accept/call_accepted
   const hasAcceptedCallRef = useRef(false);
   const hasReceivedAnswerRef = useRef(false);
 
@@ -307,7 +306,6 @@ const VideoCall = ({
             await handsRef.current.send({ image: localVideoRef.current });
           }
         } catch (error) {
-          // Ignore normal MediaPipe frame errors
         }
 
         if (isMountedRef.current && isAIActiveRef.current) {

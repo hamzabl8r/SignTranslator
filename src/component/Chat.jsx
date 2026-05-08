@@ -393,7 +393,7 @@ const Chat = () => {
                     onClick={() => handleUserSelect(user)}
                   >
                     <img
-                      src={getImageUrl(user.profilePicture)}
+                      src={getImageUrl(user.profilePic)}
                       alt={user.firstName}
                       width="44"
                       height="44"

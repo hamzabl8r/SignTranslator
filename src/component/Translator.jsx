@@ -19,7 +19,6 @@ const VIDEO_CONSTRAINTS = {
 const IMAGES_PER_CAPTURE = 3;
 const CAPTURE_INTERVAL_MS = 300;
 
-// Helper functions
 function normalizeLabel(value) {
   return value.trim().toUpperCase().replace(/\s+/g, '_');
 }
@@ -31,6 +30,11 @@ function dataURLtoBlob(dataURL) {
   const array = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i);
   return new Blob([array], { type: mime });
+}
+
+function normalizeSign(sign) {
+  if (typeof sign === 'object' && sign !== null) return sign.label || '';
+  return String(sign);
 }
 
 async function uploadWithLimit(uploadFns, limit = 2) {
@@ -74,12 +78,10 @@ function SignModal({ sign, onClose }) {
       .finally(() => setLoading(false));
   }, [sign]);
 
-  // Close on backdrop click
   const handleBackdrop = (e) => {
     if (e.target === e.currentTarget) onClose();
   };
 
-  // Close on Escape
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handler);
@@ -109,7 +111,6 @@ function SignModal({ sign, onClose }) {
 
           {!loading && !error && images.length > 0 && (
             <>
-              {/* Main image */}
               <div className="sd-modal__main-img-wrap">
                 <img
                   className="sd-modal__main-img"
@@ -118,7 +119,6 @@ function SignModal({ sign, onClose }) {
                 />
               </div>
 
-              {/* Thumbnail strip */}
               {images.length > 1 && (
                 <div className="sd-modal__thumbs">
                   {images.map((img, i) => (
@@ -293,7 +293,6 @@ function ContributorPanel({ onContribute }) {
       setLabel('');
       discard();
 
-      // FIXED: removed stale closure bug — no longer checks `status` inside setTimeout
       setTimeout(() => {
         if (isMountedRef.current) {
           setStatus('idle');
@@ -407,8 +406,8 @@ function ContributorPanel({ onContribute }) {
 function DatasetSubmitPanel() {
   const { token } = useSelector((state) => state.user);
   const [form, setForm] = useState({ name: '', description: '', type: 'csv' });
-  const [images, setImages] = useState([]);       // File objects
-  const [previews, setPreviews] = useState([]);   // base64 previews
+  const [images, setImages] = useState([]);
+  const [previews, setPreviews] = useState([]);
   const [status, setStatus] = useState('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const fileInputRef = useRef(null);
@@ -419,11 +418,9 @@ function DatasetSubmitPanel() {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
-    // Max 10 images
     const newFiles = [...images, ...files].slice(0, 10);
     setImages(newFiles);
 
-    // Generate previews
     const readers = newFiles.map((file) =>
       new Promise((resolve) => {
         const reader = new FileReader();
@@ -460,7 +457,6 @@ function DatasetSubmitPanel() {
     setErrorMsg('');
 
     try {
-      // Use FormData to support file uploads
       const fd = new FormData();
       fd.append('name', form.name.trim());
       fd.append('description', form.description.trim());
@@ -532,7 +528,6 @@ function DatasetSubmitPanel() {
         </select>
       </div>
 
-      {/* ── Image uploader ── */}
       <div className="sd-field">
         <label>Images (max 10)</label>
         <div
@@ -614,7 +609,6 @@ const Translator = () => {
   const [activePanel, setActivePanel] = useState('contribute');
   const [selectedSign, setSelectedSign] = useState(null);
 
-  // FIXED: extracted fetchSigns so it can be called on retry as well
   const fetchSigns = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -641,8 +635,12 @@ const Translator = () => {
         signsArray = data;
       }
 
-      if (signsArray.length > 0) {
-        setSigns(signsArray);
+      const normalizedSigns = signsArray
+        .map(normalizeSign)
+        .filter(Boolean);
+
+      if (normalizedSigns.length > 0) {
+        setSigns(normalizedSigns);
       }
     } catch (err) {
       console.error('Failed to fetch signs:', err);
@@ -681,11 +679,7 @@ const Translator = () => {
         <div className="sd-error-container" style={{ textAlign: 'center', padding: '2rem' }}>
           <h2>Unable to Load Signs</h2>
           <p style={{ color: '#dc2626' }}>{error}</p>
-          {/* FIXED: retry without full page reload */}
-          <button
-            onClick={fetchSigns}
-            className="sd-btn sd-btn--primary"
-          >
+          <button onClick={fetchSigns} className="sd-btn sd-btn--primary">
             Try Again
           </button>
         </div>

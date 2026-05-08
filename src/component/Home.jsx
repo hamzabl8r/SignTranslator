@@ -21,7 +21,6 @@ const Home = () => {
           </div>
         </div>
         <div className="hero-visual">
-          {/* You can place an illustration or a stylized version of your logo here */}
           <div className="abstract-shape"></div>
         </div>
       </section>

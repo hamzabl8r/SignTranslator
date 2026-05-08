@@ -14,14 +14,13 @@ const ForgotPassword = () => {
         if (!msg) return '';
         if (typeof msg === 'string') return msg;
         if (msg?.msg) return msg.msg;           
-        if (msg?.message) return msg.message;   // Autre cas possible
-        return JSON.stringify(msg);             // Fallback
+        if (msg?.message) return msg.message;   
+        return JSON.stringify(msg);            
     };
 
     useEffect(() => {
         return () => {
             dispatch(clearMessage());
-            // dispatch(clearAuthFeedback());
         };
     }, [dispatch]);
 
