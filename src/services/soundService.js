@@ -1,6 +1,7 @@
 class SoundService {
     constructor() {
         this.audioContext = null;
+        this.isUnlocked = false;
         this.ringtoneInterval = null;
         this.isRinging = false;
         this.isMuted = false;
@@ -9,12 +10,19 @@ class SoundService {
 
     getContext() {
         if (!this.audioContext) {
+            if (!this.isUnlocked) return null;
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
-        if (this.audioContext.state === 'suspended') {
-            this.audioContext.resume();
-        }
         return this.audioContext;
+    }
+
+    unlock() {
+        this.isUnlocked = true;
+        const ctx = this.getContext();
+        if (ctx && ctx.state === 'suspended') {
+            ctx.resume().catch(() => {
+            });
+        }
     }
 
     setMuted(muted) {
@@ -29,6 +37,7 @@ class SoundService {
 
     _playTone({ frequency, type = 'sine', duration, gainStart = 0.3, gainEnd = 0, startTime = 0, detune = 0 }) {
         const ctx = this.getContext();
+        if (!ctx) return;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
 
@@ -51,6 +60,7 @@ class SoundService {
 
     _playNoise({ duration, gainValue = 0.05, startTime = 0, filterFreq = 1000 }) {
         const ctx = this.getContext();
+        if (!ctx) return;
         const bufferSize = ctx.sampleRate * duration;
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
         const data = buffer.getChannelData(0);
@@ -87,7 +97,9 @@ class SoundService {
     playMessageSent() {
         if (this.isMuted) return;
         try {
+            this.unlock();
             const ctx = this.getContext();
+            if (!ctx) return;
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
 
@@ -108,7 +120,9 @@ class SoundService {
 
     _ringOnce() {
         try {
+            this.unlock();
             const ctx = this.getContext();
+            if (!ctx) return;
             const beepDuration = 0.15;
             const beepGap = 0.1;
             const freq = 440;

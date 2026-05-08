@@ -45,6 +45,7 @@ const Chat = () => {
 
   const messagesEndRef = useRef(null);
   const selectedUserRef = useRef(selectedUser);
+  const lastMarkedConversationIdRef = useRef(null);
 
   useEffect(() => {
     selectedUserRef.current = selectedUser;
@@ -80,6 +81,8 @@ const Chat = () => {
   };
 
   const handleStartVideoCall = () => {
+    soundService.unlock();
+
     if (!selectedUser) {
       toast.error("Please select a user first");
       return;
@@ -230,13 +233,18 @@ const Chat = () => {
       dispatch(setCurrentConversation(existingConv));
       dispatch(getMessages(existingConv._id));
 
-      if (socketService.isConnected()) {
+      if (
+        socketService.isConnected() &&
+        lastMarkedConversationIdRef.current !== existingConv._id
+      ) {
+        lastMarkedConversationIdRef.current = existingConv._id;
         markReadSocket({
           conversationId: existingConv._id,
           userId: currentUser?._id,
         });
       }
     } else {
+      lastMarkedConversationIdRef.current = null;
       dispatch(setCurrentConversation({ participant: selectedUser }));
     }
   }, [selectedUser, conversations, dispatch, currentUser]);
@@ -249,6 +257,7 @@ const Chat = () => {
 
   const handleSendMessage = (e) => {
     e.preventDefault();
+    soundService.unlock();
 
     const text = messageText.trim();
 

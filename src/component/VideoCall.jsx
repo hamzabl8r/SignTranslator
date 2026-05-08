@@ -409,7 +409,7 @@ const VideoCall = ({
       setRemotePrediction('');
       setCallStatusSynced('idle');
 
-      if (!hasLoggedEndedRef.current) {
+      if (hasLoggedConnectedRef.current && !hasLoggedEndedRef.current) {
         hasLoggedEndedRef.current = true;
         persistCallEventMessage('📴 Video call ended');
       }
