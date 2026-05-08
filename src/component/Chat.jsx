@@ -330,6 +330,7 @@ const Chat = () => {
   };
 
   const getLastMessage = (conv) => {
+    if (typeof conv?.lastMessage === "string") return conv.lastMessage;
     return conv?.lastMessage?.text || "No messages yet";
   };
 
@@ -432,7 +433,7 @@ const Chat = () => {
                   onClick={() => handleUserSelect(conversation.participant)}
                 >
                   <img
-                    src={getImageUrl(conversation.participant?.profilePicture)}
+                    src={getImageUrl(conversation.participant?.profilePic)}
                     alt={conversation.participant?.firstName}
                     width="48"
                     height="48"
@@ -478,7 +479,7 @@ const Chat = () => {
                 </button>
 
                 <img
-                  src={getImageUrl(selectedUser.profilePicture)}
+                  src={getImageUrl(selectedUser.profilePic)}
                   alt={selectedUser.firstName}
                   width="48"
                   height="48"
@@ -518,8 +519,8 @@ const Chat = () => {
                           className="message-avatar"
                           src={getImageUrl(
                             isSent
-                              ? currentUser.profilePicture
-                              : selectedUser.profilePicture
+                              ? currentUser.profilePic
+                              : selectedUser.profilePic
                           )}
                           alt="avatar"
                           width="32"

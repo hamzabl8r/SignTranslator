@@ -95,9 +95,13 @@ class SocketService {
         }
     }
 
-    emit(event, data) {
+    emit(event, data, callback) {
         if (this.socket && this.socket.connected) {
-            this.socket.emit(event, data);
+            if (typeof callback === 'function') {
+                this.socket.emit(event, data, callback);
+            } else {
+                this.socket.emit(event, data);
+            }
             console.log(`📡 Emitted ${event}:`, data);
         } else {
             console.warn(`⚠️ Socket not connected, cannot emit "${event}". Connected: ${this.socket?.connected}, Socket: ${!!this.socket}`);

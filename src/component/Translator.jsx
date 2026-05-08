@@ -9,6 +9,7 @@ import './Styles/DatasetUpload.css';
 
 const API_BASE = "https://modelsigntranslator.onrender.com";
 const BACKEND_URL = "https://backpfe-production-789f.up.railway.app";
+const CONTRIBUTE_API_KEY = process.env.REACT_APP_CONTRIBUTE_API_KEY || "";
 
 const VIDEO_CONSTRAINTS = {
   width: { ideal: 640 },
@@ -37,6 +38,23 @@ function normalizeSign(sign) {
   return String(sign);
 }
 
+function toAbsoluteImageUrl(value) {
+  if (!value) return '';
+
+  if (typeof value === 'object') {
+    const candidate = value.url || value.path || value.src || '';
+    return toAbsoluteImageUrl(candidate);
+  }
+
+  const raw = String(value).trim().replace(/\\/g, '/');
+  if (!raw) return '';
+
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  const cleaned = raw.startsWith('/') ? raw : `/${raw.replace(/^\.?\//, '')}`;
+  return `${API_BASE}${cleaned}`;
+}
+
 async function uploadWithLimit(uploadFns, limit = 2) {
   const results = [];
   const errors = [];
@@ -58,11 +76,12 @@ async function uploadWithLimit(uploadFns, limit = 2) {
 }
 
 /* ── Sign Images Modal ─────────────────────────────────────── */
-function SignModal({ sign, onClose }) {
+function SignModal({ sign, onClose, canDelete = false, onDeleted }) {
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -70,7 +89,9 @@ function SignModal({ sign, onClose }) {
     fetch(`${API_BASE}/api/signs/${sign}/images`)
       .then((res) => res.ok ? res.json() : Promise.reject())
       .then((data) => {
-        const imgs = Array.isArray(data.images) ? data.images : [];
+        const imgs = (Array.isArray(data.images) ? data.images : [])
+          .map(toAbsoluteImageUrl)
+          .filter(Boolean);
         setImages(imgs);
         if (imgs.length > 0) setSelected(imgs[0]);
       })
@@ -88,12 +109,65 @@ function SignModal({ sign, onClose }) {
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
+  const handleDeleteSign = async () => {
+    if (!canDelete || deleting) return;
+
+    const ok = window.confirm(`Delete sign "${sign}" and all its images?`);
+    if (!ok) return;
+
+    const authToken = localStorage.getItem('token');
+    if (!authToken) {
+      setError('Authentication required. Please login again.');
+      return;
+    }
+
+    const authHeader = authToken.startsWith('Bearer ') ? authToken : `Bearer ${authToken}`;
+
+    setDeleting(true);
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE}/api/signs/${encodeURIComponent(sign)}`, {
+        method: 'DELETE',
+        headers: {
+          ...(CONTRIBUTE_API_KEY ? { 'X-API-Key': CONTRIBUTE_API_KEY } : {}),
+          Authorization: authHeader,
+        }
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || data.msg || 'Failed to delete sign');
+      }
+
+      if (typeof onDeleted === 'function') {
+        onDeleted(sign);
+      }
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Delete failed');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="sd-modal-backdrop" onClick={handleBackdrop}>
       <div className="sd-modal">
         <div className="sd-modal__header">
           <h3 className="sd-modal__title">{sign.replace(/_/g, ' ')}</h3>
-          <button className="sd-modal__close" onClick={onClose}>✕</button>
+          <div className="sd-modal__actions">
+            {canDelete && (
+              <button
+                className="sd-modal__delete"
+                onClick={handleDeleteSign}
+                disabled={deleting}
+                title="Delete sign"
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            )}
+            <button className="sd-modal__close" onClick={onClose}>✕</button>
+          </div>
         </div>
 
         <div className="sd-modal__body">
@@ -271,6 +345,9 @@ function ContributorPanel({ onContribute }) {
 
         const response = await fetch(`${API_BASE}/api/signs/contribute`, {
           method: 'POST',
+          headers: {
+            ...(CONTRIBUTE_API_KEY ? { 'X-API-Key': CONTRIBUTE_API_KEY } : {}),
+          },
           body: fd,
         });
 
@@ -438,6 +515,17 @@ function DatasetSubmitPanel() {
     setPreviews(newPreviews);
   };
 
+  const clearDatasetDraft = () => {
+    setForm({ name: '', description: '', type: 'csv' });
+    setImages([]);
+    setPreviews([]);
+    setStatus('idle');
+    setErrorMsg('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleSubmit = async () => {
     if (!form.name.trim()) {
       setStatus('error');
@@ -587,6 +675,14 @@ function DatasetSubmitPanel() {
         >
           {status === 'loading' ? 'Soumission en cours...' : '📤 Soumettre le dataset'}
         </button>
+        <button
+          type="button"
+          className="sd-btn sd-btn--danger"
+          onClick={clearDatasetDraft}
+          disabled={status === 'loading' || (!form.name.trim() && images.length === 0 && !form.description.trim())}
+        >
+          🗑️ Delete dataset draft
+        </button>
       </div>
 
       {status === 'success' && (
@@ -601,6 +697,7 @@ function DatasetSubmitPanel() {
 
 /* ── Main Translator Component ── */
 const Translator = () => {
+  const user = useSelector((state) => state.user.user);
   const [signs, setSigns] = useState(['HELLO', 'THANK_YOU', 'YES', 'NO', 'PLEASE']);
   const [query, setQuery] = useState('');
   const [newSigns, setNewSigns] = useState(new Set());
@@ -758,6 +855,15 @@ const Translator = () => {
       {selectedSign && (
         <SignModal
           sign={selectedSign}
+          canDelete={Boolean(user?.isAdmin)}
+          onDeleted={(deletedSign) => {
+            setSigns((prev) => prev.filter((s) => s !== deletedSign));
+            setNewSigns((prev) => {
+              const next = new Set(prev);
+              next.delete(deletedSign);
+              return next;
+            });
+          }}
           onClose={() => setSelectedSign(null)}
         />
       )}

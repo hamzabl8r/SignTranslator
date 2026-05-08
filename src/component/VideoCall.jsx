@@ -683,7 +683,7 @@ const VideoCall = ({
               <img
                 src={
                   selectedUser?.profilePic
-                    ? `https://backpfe-production.up.railway.app${selectedUser.profilePic}`
+                    ? `https://backpfe-production-789f.up.railway.app${selectedUser.profilePic}`
                     : '/default-avatar.png'
                 }
                 alt={selectedUser?.firstName || 'user'}
