@@ -62,6 +62,8 @@ const VideoCall = ({
 
   const hasAcceptedCallRef = useRef(false);
   const hasReceivedAnswerRef = useRef(false);
+  const hasLoggedConnectedRef = useRef(false);
+  const hasLoggedEndedRef = useRef(false);
 
   // Prevent cleanup loops
   const isCleaningUpRef = useRef(false);
@@ -144,6 +146,23 @@ const VideoCall = ({
       }
     },
     [saveMessageToDB]
+  );
+
+  const persistCallEventMessage = useCallback(
+    (text) => {
+      if (!currentUser?._id || !selectedUser?._id || !text) return;
+
+      try {
+        sendMessageSocket({
+          senderId: currentUser._id,
+          receiverId: selectedUser._id,
+          text,
+        });
+      } catch (error) {
+        console.error("Error saving call event message:", error);
+      }
+    },
+    [currentUser?._id, selectedUser?._id]
   );
 
   const handleSendChat = (e) => {
@@ -344,6 +363,7 @@ const VideoCall = ({
 
       hasAcceptedCallRef.current = false;
       hasReceivedAnswerRef.current = false;
+      hasLoggedConnectedRef.current = false;
 
       if (callTimeoutRef.current) {
         clearTimeout(callTimeoutRef.current);
@@ -389,6 +409,11 @@ const VideoCall = ({
       setRemotePrediction('');
       setCallStatusSynced('idle');
 
+      if (!hasLoggedEndedRef.current) {
+        hasLoggedEndedRef.current = true;
+        persistCallEventMessage('📴 Video call ended');
+      }
+
       if (emitEndCall && currentUser?._id) {
         const targetUserId =
           selectedUser?._id || incomingCall?.fromUserId || incomingCall?.toUserId;
@@ -415,6 +440,7 @@ const VideoCall = ({
       selectedUser?._id,
       incomingCall,
       onClose,
+      persistCallEventMessage,
       setCallStatusSynced,
     ]
   );
@@ -452,6 +478,7 @@ const VideoCall = ({
 
     hasAcceptedCallRef.current = false;
     hasReceivedAnswerRef.current = false;
+    hasLoggedEndedRef.current = false;
     isCleaningUpRef.current = false;
 
     setCallStatusSynced('calling');
@@ -480,6 +507,10 @@ const VideoCall = ({
       peer.on('stream', (remoteStream) => {
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = remoteStream;
+          remoteVideoRef.current
+            .play()
+            .catch(() => {
+            });
         }
 
         if (callTimeoutRef.current) {
@@ -488,6 +519,11 @@ const VideoCall = ({
         }
 
         setCallStatusSynced('connected');
+
+        if (!hasLoggedConnectedRef.current) {
+          hasLoggedConnectedRef.current = true;
+          persistCallEventMessage('📞 Video call connected');
+        }
 
         setTimeout(() => {
           if (isMountedRef.current && isAIActiveRef.current) {
@@ -557,9 +593,18 @@ const VideoCall = ({
       peer.on('stream', (remoteStream) => {
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = remoteStream;
+          remoteVideoRef.current
+            .play()
+            .catch(() => {
+            });
         }
 
         setCallStatusSynced('connected');
+
+        if (!hasLoggedConnectedRef.current) {
+          hasLoggedConnectedRef.current = true;
+          persistCallEventMessage('📞 Video call connected');
+        }
 
         setTimeout(() => {
           if (isMountedRef.current && isAIActiveRef.current) {
@@ -589,6 +634,7 @@ const VideoCall = ({
       peer.signal(incomingCall.signal);
 
       setIncomingCall(null);
+      setCallStatusSynced('connecting');
     } catch (error) {
       console.error('Error accepting call:', error);
       hasAcceptedCallRef.current = false;
@@ -659,7 +705,7 @@ const VideoCall = ({
       socketService.off('call_ended', handleCallEnded);
       socketService.off('call_rejected', handleCallRejected);
     };
-  }, [addChatMessage, cleanupCall, selectedUser?.firstName]);
+  }, [addChatMessage, cleanupCall, selectedUser?.firstName, setCallStatusSynced]);
 
   useEffect(() => {
     isMountedRef.current = true;

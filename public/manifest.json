@@ -2,13 +2,16 @@
   "short_name": "SignTranslator",
   "name": "Sign Language Translator",
   "description": "Translate and contribute sign language gestures using your webcam.",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
   "theme_color": "#0f172a",
   "background_color": "#0f172a",
-  "scope": "/",
   "lang": "fr",
+  "categories": ["education", "productivity", "utilities"],
   "icons": [
     {
       "src": "/icons/icon-48x48.png",
