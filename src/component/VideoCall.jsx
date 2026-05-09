@@ -71,6 +71,13 @@ const VideoCall = ({
   // Stable ref to cleanupCall so unmount effect never re-runs due to dep changes
   const cleanupCallRef = useRef(null);
 
+  // FIX: Ping AI server on mount to wake up Render.com free-tier instance
+  useEffect(() => {
+    axios.get(`${AI_SERVER_URL}/`).catch(() => {
+      console.log('AI server wake-up ping sent');
+    });
+  }, []);
+
   const setCallStatusSynced = useCallback((status) => {
     callStatusRef.current = status;
     setCallStatus(status);
@@ -98,7 +105,7 @@ const VideoCall = ({
   const cleanupHands = useCallback(() => {
     if (animationFrameRef.current) {
       clearInterval(animationFrameRef.current);
-      cancelAnimationFrame(animationFrameRef.current); // safe to call both
+      cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
 
@@ -214,7 +221,9 @@ const VideoCall = ({
               'ngrok-skip-browser-warning': '69420',
               'Content-Type': 'application/json',
             },
-            timeout: 5000,
+            // FIX: Increased timeout from 5000ms to 15000ms to handle
+            // Render.com free-tier cold starts (can take 10-30 seconds)
+            timeout: 15000,
           }
         );
 
@@ -251,10 +260,13 @@ const VideoCall = ({
       } catch (err) {
         console.error('❌ Erreur API:', err.message);
       } finally {
+        // FIX: Reduced cooldown from 1000ms to 300ms.
+        // The previous 1000ms lock combined with the 200ms detection interval
+        // caused nearly all prediction attempts to be blocked by isProcessingRef.
         setTimeout(() => {
           isProcessingRef.current = false;
           setIsProcessing(false);
-        }, 1000);
+        }, 300);
       }
     },
     [addChatMessage, currentUser?._id, selectedUser?._id]
@@ -288,7 +300,7 @@ const VideoCall = ({
         // 'playing' fires once the browser starts rendering frames
         video.addEventListener('playing', done, { once: true });
 
-        // Fallback poll every 100ms — more aggressive than before
+        // Fallback poll every 100ms
         const poll = setInterval(() => {
           if (video.videoWidth > 0 && video.videoHeight > 0) done();
         }, 100);
@@ -328,13 +340,12 @@ const VideoCall = ({
       setAiStatus('Chargement du modèle...');
       await hands.initialize();
 
-      console.log('🟢 MediaPipe initialized, handsRef:', !!handsRef.current, 'mounted:', isMountedRef.current);
-
       if (!isMountedRef.current) return;
 
       // Register onResults AFTER initialize() so it's bound to the loaded model
-      hands.onResults = async (results) => {
-        console.log('🔵 onResults fired, landmarks:', results.multiHandLandmarks?.length);
+      // FIX: onResults is now synchronous — it schedules sendPrediction without
+      // awaiting it, preventing MediaPipe from being stalled by a dangling Promise.
+      hands.onResults = (results) => {
         if (!isMountedRef.current || !isAIActiveRef.current) return;
 
         const hasHands =
@@ -359,7 +370,8 @@ const VideoCall = ({
           }
 
           if (dataAux.length === 84 && !isProcessingRef.current) {
-            await sendPrediction(dataAux);
+            // Fire-and-forget: don't await, MediaPipe doesn't support async onResults
+            sendPrediction(dataAux);
           }
         } else {
           setAiStatus('🤟 En attente de geste...');
@@ -367,14 +379,14 @@ const VideoCall = ({
       };
 
       // Use an offscreen canvas to safely extract frames from the video.
-      // Passing the video element directly to MediaPipe can cause zero-size
-      // frame errors when the video is technically playing but not yet painted.
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
 
-      // Use setInterval instead of requestAnimationFrame + async.
-      // rAF + async causes event loop starvation: the loop reschedules itself
-      // before hands.send() resolves, preventing onResults from ever firing.
+      // FIX: Detection interval increased from 200ms to 500ms.
+      // 200ms (5fps) was too fast: frames piled up faster than the API
+      // could respond, keeping isProcessingRef locked almost continuously.
+      // 500ms (2fps) is sufficient for sign detection and gives the API
+      // enough breathing room to respond between frames.
       const detectionInterval = setInterval(async () => {
         if (
           !isMountedRef.current ||
@@ -382,14 +394,12 @@ const VideoCall = ({
           !localVideoRef.current ||
           !isAIActiveRef.current
         ) {
-          console.warn('⚠️ Detection skipped — mounted:', isMountedRef.current, 'hands:', !!handsRef.current, 'video:', !!localVideoRef.current, 'AI:', isAIActiveRef.current);
           clearInterval(detectionInterval);
           return;
         }
 
         try {
           const video = localVideoRef.current;
-          console.log('📷 Video state:', video.readyState, video.videoWidth, 'x', video.videoHeight);
 
           if (
             video.readyState >= 2 &&
@@ -400,14 +410,12 @@ const VideoCall = ({
             if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
 
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            console.log('📤 Sending to MediaPipe, canvas:', canvas.width, 'x', canvas.height);
             await handsRef.current.send({ image: canvas });
-            console.log('✅ Send complete');
           }
         } catch (error) {
           console.warn('MediaPipe send error:', error);
         }
-      }, 200); // ~5fps — enough for sign detection, avoids overwhelming MediaPipe
+      }, 500); // FIX: was 200ms
 
       // Store interval ID so cleanupHands can clear it
       animationFrameRef.current = detectionInterval;
@@ -586,7 +594,7 @@ const VideoCall = ({
 
       let callSignalSent = false;
       peer.on('signal', (signal) => {
-        if (callSignalSent) return; // prevent duplicate call_user emissions
+        if (callSignalSent) return;
         callSignalSent = true;
         socketService.emit('call_user', {
           fromUserId: currentUser._id,
@@ -602,10 +610,7 @@ const VideoCall = ({
       peer.on('stream', (remoteStream) => {
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = remoteStream;
-          remoteVideoRef.current
-            .play()
-            .catch(() => {
-            });
+          remoteVideoRef.current.play().catch(() => {});
         }
 
         if (callTimeoutRef.current) {
@@ -679,7 +684,7 @@ const VideoCall = ({
 
       let acceptSignalSent = false;
       peer.on('signal', (signal) => {
-        if (acceptSignalSent) return; // prevent duplicate accept_call emissions
+        if (acceptSignalSent) return;
         acceptSignalSent = true;
         socketService.emit('accept_call', {
           toUserId: incomingCall.fromUserId,
@@ -691,10 +696,7 @@ const VideoCall = ({
       peer.on('stream', (remoteStream) => {
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = remoteStream;
-          remoteVideoRef.current
-            .play()
-            .catch(() => {
-            });
+          remoteVideoRef.current.play().catch(() => {});
         }
 
         // Only clear incomingCall once the stream is confirmed
