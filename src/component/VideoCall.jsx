@@ -59,6 +59,7 @@ const VideoCall = ({
 
   const callTimeoutRef = useRef(null);
   const callStatusRef = useRef(initialIncomingCall ? 'ringing' : 'idle');
+  const incomingCallRef = useRef(initialIncomingCall || null);
 
   const hasAcceptedCallRef = useRef(false);
   const hasReceivedAnswerRef = useRef(false);
@@ -85,6 +86,7 @@ const VideoCall = ({
   useEffect(() => {
     if (initialIncomingCall) {
       setIncomingCall(initialIncomingCall);
+      incomingCallRef.current = initialIncomingCall;
       setCallStatusSynced('ringing');
       hasAcceptedCallRef.current = false;
       hasReceivedAnswerRef.current = false;
@@ -408,6 +410,7 @@ const VideoCall = ({
       }
 
       setIncomingCall(null);
+      incomingCallRef.current = null;
       setLocalPrediction('');
       setRemotePrediction('');
       setCallStatusSynced('idle');
@@ -419,7 +422,7 @@ const VideoCall = ({
 
       if (emitEndCall && currentUser?._id) {
         const targetUserId =
-          selectedUser?._id || incomingCall?.fromUserId || incomingCall?.toUserId;
+          selectedUser?._id || incomingCallRef.current?.fromUserId || incomingCallRef.current?.toUserId;
 
         if (targetUserId) {
           socketService.emit('end_call', {
@@ -441,7 +444,6 @@ const VideoCall = ({
       cleanupHands,
       currentUser?._id,
       selectedUser?._id,
-      incomingCall,
       onClose,
       persistCallEventMessage,
       setCallStatusSynced,
@@ -602,6 +604,9 @@ const VideoCall = ({
             });
         }
 
+        // Only clear incomingCall once the stream is confirmed
+        setIncomingCall(null);
+        incomingCallRef.current = null;
         setCallStatusSynced('connected');
 
         if (!hasLoggedConnectedRef.current) {
@@ -633,11 +638,9 @@ const VideoCall = ({
 
       peerRef.current = peer;
 
-      // Important: peerRef is assigned before signal
+      // Trigger the WebRTC handshake with the caller's signal
       peer.signal(incomingCall.signal);
 
-      setIncomingCall(null);
-      setCallStatusSynced('connected');
     } catch (error) {
       console.error('Error accepting call:', error);
       hasAcceptedCallRef.current = false;
