@@ -71,11 +71,23 @@ const VideoCall = ({
   // Stable ref to cleanupCall so unmount effect never re-runs due to dep changes
   const cleanupCallRef = useRef(null);
 
-  // FIX: Ping AI server on mount to wake up Render.com free-tier instance
+  // FIX: serverReadyRef holds a Promise that resolves once the AI server responds.
+  // sendPrediction awaits this before every call, so no predict request fires
+  // until the Render.com cold-start is fully complete (can take up to ~40s).
+  const serverReadyRef = useRef(null);
+
   useEffect(() => {
-    axios.get(`${AI_SERVER_URL}/`).catch(() => {
-      console.log('AI server wake-up ping sent');
-    });
+    setAiStatus('⏳ Réveil du serveur IA...');
+    serverReadyRef.current = axios
+      .get(`${AI_SERVER_URL}/`, { timeout: 60000 })
+      .then(() => {
+        console.log('✅ AI server is ready');
+        if (isMountedRef.current) setAiStatus('✅ Serveur prêt');
+      })
+      .catch((err) => {
+        console.warn('⚠️ AI server wake-up failed, will retry on predict:', err.message);
+        if (isMountedRef.current) setAiStatus('⚠️ Serveur lent, tentative...');
+      });
   }, []);
 
   const setCallStatusSynced = useCallback((status) => {
@@ -213,6 +225,15 @@ const VideoCall = ({
       setIsProcessing(true);
 
       try {
+        // FIX: Wait for the server wake-up to complete before sending any
+        // predict request. This prevents predict calls from timing out during
+        // the Render.com cold start (which can take 30-40 seconds).
+        if (serverReadyRef.current) {
+          await serverReadyRef.current;
+        }
+
+        if (!isMountedRef.current || !isAIActiveRef.current) return;
+
         const res = await axios.post(
           `${AI_SERVER_URL}/predict`,
           { landmarks },
@@ -221,9 +242,9 @@ const VideoCall = ({
               'ngrok-skip-browser-warning': '69420',
               'Content-Type': 'application/json',
             },
-            // FIX: Increased timeout from 5000ms to 15000ms to handle
-            // Render.com free-tier cold starts (can take 10-30 seconds)
-            timeout: 15000,
+            // FIX: 60s timeout — server is already awake by this point,
+            // so this is just a safety net for slow inference.
+            timeout: 60000,
           }
         );
 
@@ -419,6 +440,8 @@ const VideoCall = ({
 
       // Store interval ID so cleanupHands can clear it
       animationFrameRef.current = detectionInterval;
+      // Show ready status; if server is still waking up, sendPrediction
+      // will block internally until serverReadyRef resolves.
       setAiStatus('✅ Prêt - Faites des gestes!');
     } catch (error) {
       console.error('Failed to initialize MediaPipe:', error);
