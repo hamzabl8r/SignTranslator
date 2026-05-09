@@ -279,7 +279,7 @@ const VideoCall = ({
         minTrackingConfidence: 0.5,
       });
 
-      hands.onResults(async (results) => {
+      hands.onResults = async (results) => {
         if (!isMountedRef.current || !isAIActiveRef.current) return;
 
         const hasHands =
@@ -309,7 +309,7 @@ const VideoCall = ({
         } else {
           setAiStatus('🤟 En attente de geste...');
         }
-      });
+      };
 
       const detectFrame = async () => {
         if (
@@ -363,6 +363,9 @@ const VideoCall = ({
 
       hasAcceptedCallRef.current = false;
       hasReceivedAnswerRef.current = false;
+
+      // Capture before resetting so we can log the end-call message below
+      const wasConnected = hasLoggedConnectedRef.current;
       hasLoggedConnectedRef.current = false;
 
       if (callTimeoutRef.current) {
@@ -409,7 +412,7 @@ const VideoCall = ({
       setRemotePrediction('');
       setCallStatusSynced('idle');
 
-      if (hasLoggedConnectedRef.current && !hasLoggedEndedRef.current) {
+      if (wasConnected && !hasLoggedEndedRef.current) {
         hasLoggedEndedRef.current = true;
         persistCallEventMessage('📴 Video call ended');
       }
@@ -634,7 +637,7 @@ const VideoCall = ({
       peer.signal(incomingCall.signal);
 
       setIncomingCall(null);
-      setCallStatusSynced('connecting');
+      setCallStatusSynced('connected');
     } catch (error) {
       console.error('Error accepting call:', error);
       hasAcceptedCallRef.current = false;
