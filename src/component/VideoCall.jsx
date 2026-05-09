@@ -328,10 +328,13 @@ const VideoCall = ({
       setAiStatus('Chargement du modèle...');
       await hands.initialize();
 
+      console.log('🟢 MediaPipe initialized, handsRef:', !!handsRef.current, 'mounted:', isMountedRef.current);
+
       if (!isMountedRef.current) return;
 
       // Register onResults AFTER initialize() so it's bound to the loaded model
       hands.onResults = async (results) => {
+        console.log('🔵 onResults fired, landmarks:', results.multiHandLandmarks?.length);
         if (!isMountedRef.current || !isAIActiveRef.current) return;
 
         const hasHands =
@@ -379,12 +382,14 @@ const VideoCall = ({
           !localVideoRef.current ||
           !isAIActiveRef.current
         ) {
+          console.warn('⚠️ Detection skipped — mounted:', isMountedRef.current, 'hands:', !!handsRef.current, 'video:', !!localVideoRef.current, 'AI:', isAIActiveRef.current);
           clearInterval(detectionInterval);
           return;
         }
 
         try {
           const video = localVideoRef.current;
+          console.log('📷 Video state:', video.readyState, video.videoWidth, 'x', video.videoHeight);
 
           if (
             video.readyState >= 2 &&
@@ -395,7 +400,9 @@ const VideoCall = ({
             if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
 
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            console.log('📤 Sending to MediaPipe, canvas:', canvas.width, 'x', canvas.height);
             await handsRef.current.send({ image: canvas });
+            console.log('✅ Send complete');
           }
         } catch (error) {
           console.warn('MediaPipe send error:', error);
