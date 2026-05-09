@@ -263,6 +263,32 @@ const VideoCall = ({
       return;
     }
 
+    // Wait until the video element actually has dimensions.
+    // Sending a zero-size frame to MediaPipe causes a fatal WASM abort.
+    const video = localVideoRef.current;
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      setAiStatus('En attente de la vidéo...');
+      await new Promise((resolve) => {
+        const onLoaded = () => {
+          video.removeEventListener('loadeddata', onLoaded);
+          video.removeEventListener('playing', onLoaded);
+          resolve();
+        };
+        video.addEventListener('loadeddata', onLoaded);
+        video.addEventListener('playing', onLoaded);
+        // Fallback: poll every 200ms for up to 5s
+        const poll = setInterval(() => {
+          if (video.videoWidth > 0 && video.videoHeight > 0) {
+            clearInterval(poll);
+            resolve();
+          }
+        }, 200);
+        setTimeout(() => { clearInterval(poll); resolve(); }, 5000);
+      });
+    }
+
+    if (!isMountedRef.current) return;
+
     setAiStatus('Initialisation du détecteur...');
     cleanupHands();
 
@@ -323,10 +349,18 @@ const VideoCall = ({
         }
 
         try {
-          if (localVideoRef.current.readyState >= 2) {
-            await handsRef.current.send({ image: localVideoRef.current });
+          const video = localVideoRef.current;
+          // Must check videoWidth/videoHeight — readyState >= 2 is not enough.
+          // MediaPipe WASM aborts fatally if sent a zero-size frame.
+          if (
+            video.readyState >= 2 &&
+            video.videoWidth > 0 &&
+            video.videoHeight > 0
+          ) {
+            await handsRef.current.send({ image: video });
           }
         } catch (error) {
+          // Silently skip bad frames
         }
 
         if (isMountedRef.current && isAIActiveRef.current) {
