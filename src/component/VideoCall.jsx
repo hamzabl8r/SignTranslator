@@ -223,6 +223,7 @@ const VideoCall = ({
 
       isProcessingRef.current = true;
       setIsProcessing(true);
+      console.log('[PREDICT] sendPrediction called — awaiting server ready...');
 
       try {
         // Wait for the server wake-up ping to finish before firing /predict.
@@ -230,6 +231,7 @@ const VideoCall = ({
         if (serverReadyRef.current) {
           await serverReadyRef.current;
         }
+        console.log('[PREDICT] Server ready — sending /predict request...');
 
         // CRITICAL FIX: Do NOT use `return` inside a try block that has a
         // finally clause. An early `return` skips finally, leaving
@@ -370,6 +372,8 @@ const VideoCall = ({
         const hasHands =
           results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
 
+        console.log('[MP] onResults fired — hasHands:', hasHands, '| isProcessing:', isProcessingRef.current);
+
         if (hasHands) {
           setAiStatus('🖐️ Main détectée...');
 
@@ -388,8 +392,9 @@ const VideoCall = ({
             }
           }
 
+          console.log('[MP] dataAux length:', dataAux.length, '| will send:', dataAux.length === 84 && !isProcessingRef.current);
+
           if (dataAux.length === 84 && !isProcessingRef.current) {
-            // Fire-and-forget: don't await, MediaPipe doesn't support async onResults
             sendPrediction(dataAux);
           }
         } else {
@@ -429,10 +434,14 @@ const VideoCall = ({
             if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
 
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            console.log('[MP] Sending frame to MediaPipe — size:', canvas.width, 'x', canvas.height);
             await handsRef.current.send({ image: canvas });
+            console.log('[MP] Frame sent OK');
+          } else {
+            console.log('[MP] Frame skipped — readyState:', video.readyState, 'w:', video.videoWidth, 'h:', video.videoHeight);
           }
         } catch (error) {
-          console.warn('MediaPipe send error:', error);
+          console.error('[MP] send() error:', error);
         }
       }, 500); // FIX: was 200ms
 
