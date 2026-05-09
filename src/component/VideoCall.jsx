@@ -323,6 +323,13 @@ const VideoCall = ({
         minTrackingConfidence: 0.5,
       });
 
+      // Initialize MediaPipe fully before registering onResults or sending frames.
+      setAiStatus('Chargement du modèle...');
+      await hands.initialize();
+
+      if (!isMountedRef.current) return;
+
+      // Register onResults AFTER initialize() so it's bound to the loaded model
       hands.onResults = async (results) => {
         if (!isMountedRef.current || !isAIActiveRef.current) return;
 
@@ -355,19 +362,12 @@ const VideoCall = ({
         }
       };
 
-      // Initialize MediaPipe fully before sending any frames.
-      // Without this, send() can be called while WASM is still loading,
-      // causing a fatal abort on the first frame regardless of its size.
-      setAiStatus('Chargement du modèle...');
-      await hands.initialize();
-
-      if (!isMountedRef.current) return;
-
       // Use an offscreen canvas to safely extract frames from the video.
       // Passing the video element directly to MediaPipe can cause zero-size
       // frame errors when the video is technically playing but not yet painted.
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
+      let sendingFrame = false; // prevent concurrent hands.send() calls
 
       const detectFrame = async () => {
         if (
@@ -378,26 +378,28 @@ const VideoCall = ({
           return;
         }
 
-        try {
-          const video = localVideoRef.current;
+        if (!sendingFrame) {
+          try {
+            const video = localVideoRef.current;
 
-          if (
-            video.readyState >= 2 &&
-            video.videoWidth > 0 &&
-            video.videoHeight > 0
-          ) {
-            // Sync canvas size to current video dimensions
-            if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
-            if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
+            if (
+              video.readyState >= 2 &&
+              video.videoWidth > 0 &&
+              video.videoHeight > 0
+            ) {
+              if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
+              if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
 
-            // Draw the current video frame to the canvas
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // Send the canvas (guaranteed non-zero size) to MediaPipe
-            await handsRef.current.send({ image: canvas });
+              sendingFrame = true;
+              await handsRef.current.send({ image: canvas });
+              sendingFrame = false;
+            }
+          } catch (error) {
+            sendingFrame = false;
+            console.warn('MediaPipe send error:', error);
           }
-        } catch (error) {
-          // Silently skip bad frames
         }
 
         if (isMountedRef.current && isAIActiveRef.current) {
