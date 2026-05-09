@@ -97,7 +97,8 @@ const VideoCall = ({
 
   const cleanupHands = useCallback(() => {
     if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
+      clearInterval(animationFrameRef.current);
+      cancelAnimationFrame(animationFrameRef.current); // safe to call both
       animationFrameRef.current = null;
     }
 
@@ -367,47 +368,42 @@ const VideoCall = ({
       // frame errors when the video is technically playing but not yet painted.
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      let sendingFrame = false; // prevent concurrent hands.send() calls
 
-      const detectFrame = async () => {
+      // Use setInterval instead of requestAnimationFrame + async.
+      // rAF + async causes event loop starvation: the loop reschedules itself
+      // before hands.send() resolves, preventing onResults from ever firing.
+      const detectionInterval = setInterval(async () => {
         if (
           !isMountedRef.current ||
           !handsRef.current ||
-          !localVideoRef.current
+          !localVideoRef.current ||
+          !isAIActiveRef.current
         ) {
+          clearInterval(detectionInterval);
           return;
         }
 
-        if (!sendingFrame) {
-          try {
-            const video = localVideoRef.current;
+        try {
+          const video = localVideoRef.current;
 
-            if (
-              video.readyState >= 2 &&
-              video.videoWidth > 0 &&
-              video.videoHeight > 0
-            ) {
-              if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
-              if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
+          if (
+            video.readyState >= 2 &&
+            video.videoWidth > 0 &&
+            video.videoHeight > 0
+          ) {
+            if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
+            if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
 
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-              sendingFrame = true;
-              await handsRef.current.send({ image: canvas });
-              sendingFrame = false;
-            }
-          } catch (error) {
-            sendingFrame = false;
-            console.warn('MediaPipe send error:', error);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            await handsRef.current.send({ image: canvas });
           }
+        } catch (error) {
+          console.warn('MediaPipe send error:', error);
         }
+      }, 200); // ~5fps — enough for sign detection, avoids overwhelming MediaPipe
 
-        if (isMountedRef.current && isAIActiveRef.current) {
-          animationFrameRef.current = requestAnimationFrame(detectFrame);
-        }
-      };
-
-      detectFrame();
+      // Store interval ID so cleanupHands can clear it
+      animationFrameRef.current = detectionInterval;
       setAiStatus('✅ Prêt - Faites des gestes!');
     } catch (error) {
       console.error('Failed to initialize MediaPipe:', error);
