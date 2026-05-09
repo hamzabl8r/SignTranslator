@@ -7,7 +7,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import './Styles/VideoCall.css';
 
-const AI_SERVER_URL = 'https://modelsigntranslator.onrender.com';
+const AI_SERVER_URL = 'https://zen-footing-depravity.ngrok-free.dev';
 
 const isBenignPeerCloseError = (err) => {
   const message = String(err?.message || err || '').toLowerCase();
