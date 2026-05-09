@@ -68,6 +68,8 @@ const VideoCall = ({
 
   // Prevent cleanup loops
   const isCleaningUpRef = useRef(false);
+  // Stable ref to cleanupCall so unmount effect never re-runs due to dep changes
+  const cleanupCallRef = useRef(null);
 
   const setCallStatusSynced = useCallback((status) => {
     callStatusRef.current = status;
@@ -519,6 +521,10 @@ const VideoCall = ({
     ]
   );
 
+  // Keep ref in sync so the unmount effect can call cleanupCall
+  // without needing it as a dependency (which would cause re-runs)
+  cleanupCallRef.current = cleanupCall;
+
   const endCall = useCallback(() => {
     cleanupCall({ emitEndCall: true, closeModal: true });
   }, [cleanupCall]);
@@ -573,7 +579,10 @@ const VideoCall = ({
         stream,
       });
 
+      let callSignalSent = false;
       peer.on('signal', (signal) => {
+        if (callSignalSent) return; // prevent duplicate call_user emissions
+        callSignalSent = true;
         socketService.emit('call_user', {
           fromUserId: currentUser._id,
           toUserId: selectedUser._id,
@@ -663,7 +672,10 @@ const VideoCall = ({
         stream,
       });
 
+      let acceptSignalSent = false;
       peer.on('signal', (signal) => {
+        if (acceptSignalSent) return; // prevent duplicate accept_call emissions
+        acceptSignalSent = true;
         socketService.emit('accept_call', {
           toUserId: incomingCall.fromUserId,
           fromUserId: currentUser._id,
@@ -794,13 +806,13 @@ const VideoCall = ({
 
     return () => {
       isMountedRef.current = false;
-
-      cleanupCall({
+      // Use ref to avoid this effect re-running every time cleanupCall changes
+      cleanupCallRef.current?.({
         emitEndCall: false,
         closeModal: false,
       });
     };
-  }, [cleanupCall]);
+  }, []); // empty deps — runs only on mount/unmount
 
   return (
     <div className="video-call-overlay">
