@@ -269,22 +269,36 @@ const VideoCall = ({
     if (video.videoWidth === 0 || video.videoHeight === 0) {
       setAiStatus('En attente de la vidéo...');
       await new Promise((resolve) => {
-        const onLoaded = () => {
-          video.removeEventListener('loadeddata', onLoaded);
-          video.removeEventListener('playing', onLoaded);
+        // If already playing with dimensions, resolve immediately
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          return resolve();
+        }
+
+        let resolved = false;
+        const done = () => {
+          if (resolved) return;
+          resolved = true;
+          clearInterval(poll);
           resolve();
         };
-        video.addEventListener('loadeddata', onLoaded);
-        video.addEventListener('playing', onLoaded);
-        // Fallback: poll every 200ms for up to 5s
+
+        // 'playing' fires once the browser starts rendering frames
+        video.addEventListener('playing', done, { once: true });
+
+        // Fallback poll every 100ms — more aggressive than before
         const poll = setInterval(() => {
-          if (video.videoWidth > 0 && video.videoHeight > 0) {
-            clearInterval(poll);
-            resolve();
-          }
-        }, 200);
-        setTimeout(() => { clearInterval(poll); resolve(); }, 5000);
+          if (video.videoWidth > 0 && video.videoHeight > 0) done();
+        }, 100);
+
+        // Hard timeout: 8s max
+        setTimeout(done, 8000);
       });
+    }
+
+    // Double-check after waiting — if still zero, video is not usable
+    if (localVideoRef.current.videoWidth === 0 || localVideoRef.current.videoHeight === 0) {
+      setAiStatus('❌ Vidéo non disponible');
+      return;
     }
 
     if (!isMountedRef.current) return;
@@ -499,6 +513,13 @@ const VideoCall = ({
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
+        // Must call play() explicitly — autoplay alone is not reliable.
+        // Without this, videoWidth stays 0 and MediaPipe aborts.
+        try {
+          await localVideoRef.current.play();
+        } catch (e) {
+          // Ignore — browser may allow autoplay anyway
+        }
       }
 
       return stream;
