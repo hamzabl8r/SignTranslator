@@ -7,7 +7,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import './Styles/VideoCall.css';
 
-const AI_SERVER_URL = 'https://zen-footing-depravity.ngrok-free.dev';
+const AI_SERVER_URL = 'https://modelsigntranslator.onrender.com';
 
 const isBenignPeerCloseError = (err) => {
   const message = String(err?.message || err || '').toLowerCase();
@@ -225,65 +225,63 @@ const VideoCall = ({
       setIsProcessing(true);
 
       try {
-        // FIX: Wait for the server wake-up to complete before sending any
-        // predict request. This prevents predict calls from timing out during
-        // the Render.com cold start (which can take 30-40 seconds).
+        // Wait for the server wake-up ping to finish before firing /predict.
+        // This ensures the Render.com cold-start is complete first.
         if (serverReadyRef.current) {
           await serverReadyRef.current;
         }
 
-        if (!isMountedRef.current || !isAIActiveRef.current) return;
-
-        const res = await axios.post(
-          `${AI_SERVER_URL}/predict`,
-          { landmarks },
-          {
-            headers: {
-              'ngrok-skip-browser-warning': '69420',
-              'Content-Type': 'application/json',
-            },
-            // FIX: 60s timeout — server is already awake by this point,
-            // so this is just a safety net for slow inference.
-            timeout: 60000,
-          }
-        );
-
-        const predictedWord = res.data.res || res.data.prediction;
-
-        if (
-          predictedWord &&
-          predictedWord !== 'error' &&
-          predictedWord !== '...' &&
-          predictedWord !== 'aucun' &&
-          predictedWord !== lastPredictionRef.current
-        ) {
-          console.log('🎯 Prédiction:', predictedWord);
-
-          setLocalPrediction(predictedWord);
-          lastPredictionRef.current = predictedWord;
-          lastPredictionTimeRef.current = Date.now();
-
-          addChatMessage(predictedWord, true, true);
-
-          socketService.emit('send_translation', {
-            text: predictedWord,
-            toUserId: selectedUser?._id,
-            fromUserId: currentUser._id,
-            isSign: true,
-          });
-
-          setTimeout(() => {
-            if (lastPredictionRef.current === predictedWord) {
-              setLocalPrediction('');
+        // CRITICAL FIX: Do NOT use `return` inside a try block that has a
+        // finally clause. An early `return` skips finally, leaving
+        // isProcessingRef=true forever and permanently blocking all future
+        // predictions. Use if/else so finally ALWAYS executes.
+        if (isMountedRef.current && isAIActiveRef.current) {
+          const res = await axios.post(
+            `${AI_SERVER_URL}/predict`,
+            { landmarks },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              timeout: 60000,
             }
-          }, 3000);
+          );
+
+          const predictedWord = res.data.res || res.data.prediction;
+
+          if (
+            predictedWord &&
+            predictedWord !== 'error' &&
+            predictedWord !== '...' &&
+            predictedWord !== 'aucun' &&
+            predictedWord !== lastPredictionRef.current
+          ) {
+            console.log('🎯 Prédiction:', predictedWord);
+
+            setLocalPrediction(predictedWord);
+            lastPredictionRef.current = predictedWord;
+            lastPredictionTimeRef.current = Date.now();
+
+            addChatMessage(predictedWord, true, true);
+
+            socketService.emit('send_translation', {
+              text: predictedWord,
+              toUserId: selectedUser?._id,
+              fromUserId: currentUser._id,
+              isSign: true,
+            });
+
+            setTimeout(() => {
+              if (lastPredictionRef.current === predictedWord) {
+                setLocalPrediction('');
+              }
+            }, 3000);
+          }
         }
       } catch (err) {
         console.error('❌ Erreur API:', err.message);
       } finally {
-        // FIX: Reduced cooldown from 1000ms to 300ms.
-        // The previous 1000ms lock combined with the 200ms detection interval
-        // caused nearly all prediction attempts to be blocked by isProcessingRef.
+        // This ALWAYS runs — lock is always released no matter what path was taken.
         setTimeout(() => {
           isProcessingRef.current = false;
           setIsProcessing(false);
