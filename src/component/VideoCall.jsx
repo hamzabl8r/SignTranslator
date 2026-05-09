@@ -223,7 +223,6 @@ const VideoCall = ({
 
       isProcessingRef.current = true;
       setIsProcessing(true);
-      console.log('[PREDICT] sendPrediction called — awaiting server ready...');
 
       try {
         // Wait for the server wake-up ping to finish before firing /predict.
@@ -231,7 +230,6 @@ const VideoCall = ({
         if (serverReadyRef.current) {
           await serverReadyRef.current;
         }
-        console.log('[PREDICT] Server ready — sending /predict request...');
 
         // CRITICAL FIX: Do NOT use `return` inside a try block that has a
         // finally clause. An early `return` skips finally, leaving
@@ -372,8 +370,6 @@ const VideoCall = ({
         const hasHands =
           results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
 
-        console.log('[MP] onResults fired — hasHands:', hasHands, '| isProcessing:', isProcessingRef.current);
-
         if (hasHands) {
           setAiStatus('🖐️ Main détectée...');
 
@@ -392,8 +388,6 @@ const VideoCall = ({
             }
           }
 
-          console.log('[MP] dataAux length:', dataAux.length, '| will send:', dataAux.length === 84 && !isProcessingRef.current);
-
           if (dataAux.length === 84 && !isProcessingRef.current) {
             sendPrediction(dataAux);
           }
@@ -402,15 +396,12 @@ const VideoCall = ({
         }
       };
 
-      // Use an offscreen canvas to safely extract frames from the video.
+      // FIX: Pass ImageData directly to hands.send() instead of a canvas element.
+      // MediaPipe's onResults silently never fires when given a canvas in some
+      // browser/version combinations. ImageData is the most compatible input type.
       const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-      // FIX: Detection interval increased from 200ms to 500ms.
-      // 200ms (5fps) was too fast: frames piled up faster than the API
-      // could respond, keeping isProcessingRef locked almost continuously.
-      // 500ms (2fps) is sufficient for sign detection and gives the API
-      // enough breathing room to respond between frames.
       const detectionInterval = setInterval(async () => {
         if (
           !isMountedRef.current ||
@@ -434,16 +425,15 @@ const VideoCall = ({
             if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
 
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            console.log('[MP] Sending frame to MediaPipe — size:', canvas.width, 'x', canvas.height);
-            await handsRef.current.send({ image: canvas });
-            console.log('[MP] Frame sent OK');
-          } else {
-            console.log('[MP] Frame skipped — readyState:', video.readyState, 'w:', video.videoWidth, 'h:', video.videoHeight);
+
+            // Pass ImageData instead of canvas — triggers onResults reliably
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            await handsRef.current.send({ image: imageData });
           }
         } catch (error) {
           console.error('[MP] send() error:', error);
         }
-      }, 500); // FIX: was 200ms
+      }, 500);
 
       // Store interval ID so cleanupHands can clear it
       animationFrameRef.current = detectionInterval;
