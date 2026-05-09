@@ -65,9 +65,6 @@ const VideoCall = ({
   const hasReceivedAnswerRef = useRef(false);
   const hasLoggedConnectedRef = useRef(false);
   const hasLoggedEndedRef = useRef(false);
-  const hasSentOfferRef = useRef(false);
-  const hasSentAnswerRef = useRef(false);
-  const isStartingCallRef = useRef(false);
 
   // Prevent cleanup loops
   const isCleaningUpRef = useRef(false);
@@ -93,10 +90,6 @@ const VideoCall = ({
       setCallStatusSynced('ringing');
       hasAcceptedCallRef.current = false;
       hasReceivedAnswerRef.current = false;
-      hasSentOfferRef.current = false;
-      hasSentAnswerRef.current = false;
-      isStartingCallRef.current = false;
-      hasSentAnswerRef.current = false;
     }
   }, [initialIncomingCall, setCallStatusSynced]);
 
@@ -360,6 +353,20 @@ const VideoCall = ({
         }
       };
 
+      // Initialize MediaPipe fully before sending any frames.
+      // Without this, send() can be called while WASM is still loading,
+      // causing a fatal abort on the first frame regardless of its size.
+      setAiStatus('Chargement du modèle...');
+      await hands.initialize();
+
+      if (!isMountedRef.current) return;
+
+      // Use an offscreen canvas to safely extract frames from the video.
+      // Passing the video element directly to MediaPipe can cause zero-size
+      // frame errors when the video is technically playing but not yet painted.
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
       const detectFrame = async () => {
         if (
           !isMountedRef.current ||
@@ -371,24 +378,24 @@ const VideoCall = ({
 
         try {
           const video = localVideoRef.current;
-          // Must check videoWidth/videoHeight — readyState >= 2 is not enough.
-          // MediaPipe WASM aborts fatally if sent a zero-size frame.
+
           if (
             video.readyState >= 2 &&
             video.videoWidth > 0 &&
-            video.videoHeight > 0 &&
-            !video.paused &&
-            !video.ended
+            video.videoHeight > 0
           ) {
-            await handsRef.current.send({ image: video });
+            // Sync canvas size to current video dimensions
+            if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
+            if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
+
+            // Draw the current video frame to the canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Send the canvas (guaranteed non-zero size) to MediaPipe
+            await handsRef.current.send({ image: canvas });
           }
         } catch (error) {
-          const msg = String(error?.message || error || '').toLowerCase();
-          if (msg.includes('roi') || msg.includes('teximage2d') || msg.includes('webgl')) {
-            setAiStatus('⚠️ Camera frame not ready');
-            cleanupHands();
-            return;
-          }
+          // Silently skip bad frames
         }
 
         if (isMountedRef.current && isAIActiveRef.current) {
@@ -545,20 +552,14 @@ const VideoCall = ({
   };
 
   const startCall = async () => {
-    if (isStartingCallRef.current || callStatusRef.current !== 'idle') {
-      return;
-    }
-
     if (!currentUser?._id || !selectedUser?._id) {
       toast.error('Utilisateur invalide');
       return;
     }
 
-    isStartingCallRef.current = true;
     hasAcceptedCallRef.current = false;
     hasReceivedAnswerRef.current = false;
     hasLoggedEndedRef.current = false;
-    hasSentOfferRef.current = false;
     isCleaningUpRef.current = false;
 
     setCallStatusSynced('calling');
@@ -573,9 +574,6 @@ const VideoCall = ({
       });
 
       peer.on('signal', (signal) => {
-        if (hasSentOfferRef.current) return;
-        hasSentOfferRef.current = true;
-
         socketService.emit('call_user', {
           fromUserId: currentUser._id,
           toUserId: selectedUser._id,
@@ -631,7 +629,6 @@ const VideoCall = ({
       });
 
       peerRef.current = peer;
-      isStartingCallRef.current = false;
 
       callTimeoutRef.current = setTimeout(() => {
         if (isMountedRef.current && callStatusRef.current === 'calling') {
@@ -642,7 +639,6 @@ const VideoCall = ({
     } catch (error) {
       console.error('Error starting call:', error);
       setCallStatusSynced('idle');
-      isStartingCallRef.current = false;
       cleanupCall({ emitEndCall: false, closeModal: false });
     }
   };
@@ -656,7 +652,6 @@ const VideoCall = ({
     }
 
     hasAcceptedCallRef.current = true;
-    hasSentAnswerRef.current = false;
     isCleaningUpRef.current = false;
 
     try {
@@ -669,9 +664,6 @@ const VideoCall = ({
       });
 
       peer.on('signal', (signal) => {
-        if (hasSentAnswerRef.current) return;
-        hasSentAnswerRef.current = true;
-
         socketService.emit('accept_call', {
           toUserId: incomingCall.fromUserId,
           fromUserId: currentUser._id,
@@ -749,16 +741,7 @@ const VideoCall = ({
 
     const handleCallAccepted = (data) => {
       if (!peerRef.current) {
-        setTimeout(() => {
-          if (peerRef.current && !hasReceivedAnswerRef.current) {
-            try {
-              hasReceivedAnswerRef.current = true;
-              peerRef.current.signal(data.signal);
-            } catch (err) {
-              console.error('Retry signal call_accepted failed:', err);
-            }
-          }
-        }, 150);
+        console.warn('call_accepted reçu mais peer inexistant');
         return;
       }
 
