@@ -10,7 +10,7 @@ import './Styles/VideoCall.css';
 
 const AI_SERVER_URLS = [
   'https://zen-footing-depravity.ngrok-free.dev',
-  'https://modelsigntranslator.onrender.com',
+  '',
 ];
 const NGROK_HEADERS = { 'ngrok-skip-browser-warning': 'true' };
 
