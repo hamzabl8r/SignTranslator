@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import './Styles/VideoCall.css';
 
 const AI_SERVER_URL = 'https://zen-footing-depravity.ngrok-free.dev';
+const NGROK_HEADERS = { 'ngrok-skip-browser-warning': 'true' };
 
 const isBenignPeerCloseError = (err) => {
   const message = String(err?.message || err || '').toLowerCase();
@@ -79,7 +80,10 @@ const VideoCall = ({
   useEffect(() => {
     setAiStatus('⏳ Réveil du serveur IA...');
     serverReadyRef.current = axios
-      .get(`${AI_SERVER_URL}/`, { timeout: 60000 })
+      .get(`${AI_SERVER_URL}/`, {
+        timeout: 60000,
+        headers: NGROK_HEADERS,
+      })
       .then(() => {
         console.log('✅ AI server is ready');
         if (isMountedRef.current) setAiStatus('✅ Serveur prêt');
@@ -242,7 +246,10 @@ const VideoCall = ({
           `${AI_SERVER_URL}/predict`,
           { landmarks },
           {
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...NGROK_HEADERS,
+            },
             timeout: 60000,
           }
         );

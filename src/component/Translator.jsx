@@ -10,6 +10,7 @@ import './Styles/DatasetUpload.css';
 const API_BASE = "https://zen-footing-depravity.ngrok-free.dev";
 const BACKEND_URL = "https://backpfe-production-789f.up.railway.app";
 const CONTRIBUTE_API_KEY = process.env.REACT_APP_CONTRIBUTE_API_KEY || "";
+const NGROK_HEADERS = { 'ngrok-skip-browser-warning': 'true' };
 
 const VIDEO_CONSTRAINTS = {
   width: { ideal: 640 },
@@ -86,7 +87,9 @@ function SignModal({ sign, onClose, canDelete = false, onDeleted }) {
   useEffect(() => {
     setLoading(true);
     setError('');
-    fetch(`${API_BASE}/api/signs/${sign}/images`)
+    fetch(`${API_BASE}/api/signs/${sign}/images`, {
+      headers: NGROK_HEADERS,
+    })
       .then((res) => res.ok ? res.json() : Promise.reject())
       .then((data) => {
         const imgs = (Array.isArray(data.images) ? data.images : [])
@@ -131,6 +134,7 @@ function SignModal({ sign, onClose, canDelete = false, onDeleted }) {
         headers: {
           ...(CONTRIBUTE_API_KEY ? { 'X-API-Key': CONTRIBUTE_API_KEY } : {}),
           Authorization: authHeader,
+          ...NGROK_HEADERS,
         }
       });
 
@@ -347,6 +351,7 @@ function ContributorPanel({ onContribute }) {
           method: 'POST',
           headers: {
             ...(CONTRIBUTE_API_KEY ? { 'X-API-Key': CONTRIBUTE_API_KEY } : {}),
+            ...NGROK_HEADERS,
           },
           body: fd,
         });
@@ -714,6 +719,7 @@ const Translator = () => {
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
+          ...NGROK_HEADERS,
         },
       });
 
