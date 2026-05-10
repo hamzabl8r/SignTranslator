@@ -45,7 +45,9 @@ const VideoCall = ({
   const peerRef = useRef(null);
   const streamRef = useRef(null);
 
-  const animationFrameRef = useRef(null);
+  // FIX: renamed to detectionIntervalRef for clarity — stores a setInterval ID,
+  // never a requestAnimationFrame ID.
+  const detectionIntervalRef = useRef(null);
   const handsRef = useRef(null);
 
   const lastPredictionRef = useRef('');
@@ -66,16 +68,14 @@ const VideoCall = ({
   const hasLoggedConnectedRef = useRef(false);
   const hasLoggedEndedRef = useRef(false);
 
-  // Prevent cleanup loops
   const isCleaningUpRef = useRef(false);
-  // Stable ref to cleanupCall so unmount effect never re-runs due to dep changes
   const cleanupCallRef = useRef(null);
 
-  // FIX: serverReadyRef holds a Promise that resolves once the AI server responds.
-  // sendPrediction awaits this before every call, so no predict request fires
-  // until the Render.com cold-start is fully complete (can take up to ~40s).
+  // serverReadyRef holds the wake-up Promise so /predict is never fired
+  // before Render.com finishes its cold-start (~40 s on free tier).
   const serverReadyRef = useRef(null);
 
+  // ─── Server wake-up ping ────────────────────────────────────────────────────
   useEffect(() => {
     setAiStatus('⏳ Réveil du serveur IA...');
     serverReadyRef.current = axios
@@ -85,11 +85,12 @@ const VideoCall = ({
         if (isMountedRef.current) setAiStatus('✅ Serveur prêt');
       })
       .catch((err) => {
-        console.warn('⚠️ AI server wake-up failed, will retry on predict:', err.message);
+        console.warn('⚠️ AI server wake-up failed:', err.message);
         if (isMountedRef.current) setAiStatus('⚠️ Serveur lent, tentative...');
       });
   }, []);
 
+  // ─── Helpers ────────────────────────────────────────────────────────────────
   const setCallStatusSynced = useCallback((status) => {
     callStatusRef.current = status;
     setCallStatus(status);
@@ -103,7 +104,7 @@ const VideoCall = ({
     scrollChatToBottom();
   }, [chatMessages, scrollChatToBottom]);
 
-  // If parent sends a new incoming call after component is mounted
+  // Sync incoming call from parent after mount
   useEffect(() => {
     if (initialIncomingCall) {
       setIncomingCall(initialIncomingCall);
@@ -114,11 +115,13 @@ const VideoCall = ({
     }
   }, [initialIncomingCall, setCallStatusSynced]);
 
+  // ─── MediaPipe cleanup ──────────────────────────────────────────────────────
   const cleanupHands = useCallback(() => {
-    if (animationFrameRef.current) {
-      clearInterval(animationFrameRef.current);
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
+    // FIX: detectionIntervalRef stores a setInterval ID — only call clearInterval,
+    // never cancelAnimationFrame (wrong API, no-op, causes confusion).
+    if (detectionIntervalRef.current) {
+      clearInterval(detectionIntervalRef.current);
+      detectionIntervalRef.current = null;
     }
 
     if (handsRef.current) {
@@ -128,15 +131,18 @@ const VideoCall = ({
       } catch (error) {
         console.warn('Error closing hands:', error);
       }
-
       handsRef.current = null;
     }
+
+    // Reset processing lock so the next session starts clean
+    isProcessingRef.current = false;
+    setIsProcessing(false);
   }, []);
 
+  // ─── Message helpers ─────────────────────────────────────────────────────────
   const saveMessageToDB = useCallback(
     (text, isLocal) => {
       if (!selectedUser?._id || !currentUser?._id) return;
-
       try {
         sendMessageSocket({
           senderId: isLocal ? currentUser._id : selectedUser._id,
@@ -162,12 +168,8 @@ const VideoCall = ({
           minute: '2-digit',
         }),
       };
-
       setChatMessages((prev) => [...prev, msg]);
-
-      if (isSign) {
-        saveMessageToDB(text, isLocal);
-      }
+      if (isSign) saveMessageToDB(text, isLocal);
     },
     [saveMessageToDB]
   );
@@ -175,7 +177,6 @@ const VideoCall = ({
   const persistCallEventMessage = useCallback(
     (text) => {
       if (!currentUser?._id || !selectedUser?._id || !text) return;
-
       try {
         sendMessageSocket({
           senderId: currentUser._id,
@@ -183,15 +184,15 @@ const VideoCall = ({
           text,
         });
       } catch (error) {
-        console.error("Error saving call event message:", error);
+        console.error('Error saving call event message:', error);
       }
     },
     [currentUser?._id, selectedUser?._id]
   );
 
+  // ─── Chat send ───────────────────────────────────────────────────────────────
   const handleSendChat = (e) => {
     e.preventDefault();
-
     const text = chatInput.trim();
     if (!text) return;
 
@@ -217,6 +218,7 @@ const VideoCall = ({
     setChatInput('');
   };
 
+  // ─── Prediction ──────────────────────────────────────────────────────────────
   const sendPrediction = useCallback(
     async (landmarks) => {
       if (isProcessingRef.current) return;
@@ -225,63 +227,61 @@ const VideoCall = ({
       setIsProcessing(true);
 
       try {
-        // Wait for the server wake-up ping to finish before firing /predict.
-        // This ensures the Render.com cold-start is complete first.
-        if (serverReadyRef.current) {
-          await serverReadyRef.current;
+        // FIX: wrap the server-ready await in its own try/catch so that a
+        // rejected wake-up promise (timeout, network error) does NOT prevent
+        // future predictions — we just attempt /predict anyway.
+        try {
+          if (serverReadyRef.current) await serverReadyRef.current;
+        } catch (_) {
+          // Server wake-up failed — attempt prediction regardless
         }
 
-        // CRITICAL FIX: Do NOT use `return` inside a try block that has a
-        // finally clause. An early `return` skips finally, leaving
-        // isProcessingRef=true forever and permanently blocking all future
-        // predictions. Use if/else so finally ALWAYS executes.
-        if (isMountedRef.current && isAIActiveRef.current) {
-          const res = await axios.post(
-            `${AI_SERVER_URL}/predict`,
-            { landmarks },
-            {
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              timeout: 60000,
-            }
-          );
+        if (!isMountedRef.current || !isAIActiveRef.current) return;
 
-          const predictedWord = res.data.res || res.data.prediction;
-
-          if (
-            predictedWord &&
-            predictedWord !== 'error' &&
-            predictedWord !== '...' &&
-            predictedWord !== 'aucun' &&
-            predictedWord !== lastPredictionRef.current
-          ) {
-            console.log('🎯 Prédiction:', predictedWord);
-
-            setLocalPrediction(predictedWord);
-            lastPredictionRef.current = predictedWord;
-            lastPredictionTimeRef.current = Date.now();
-
-            addChatMessage(predictedWord, true, true);
-
-            socketService.emit('send_translation', {
-              text: predictedWord,
-              toUserId: selectedUser?._id,
-              fromUserId: currentUser._id,
-              isSign: true,
-            });
-
-            setTimeout(() => {
-              if (lastPredictionRef.current === predictedWord) {
-                setLocalPrediction('');
-              }
-            }, 3000);
+        const res = await axios.post(
+          `${AI_SERVER_URL}/predict`,
+          { landmarks },
+          {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 60000,
           }
+        );
+
+        const predictedWord = res.data.res || res.data.prediction;
+
+        if (
+          predictedWord &&
+          predictedWord !== 'error' &&
+          predictedWord !== '...' &&
+          predictedWord !== 'aucun' &&
+          predictedWord !== lastPredictionRef.current
+        ) {
+          console.log('🎯 Prédiction:', predictedWord);
+
+          setLocalPrediction(predictedWord);
+          lastPredictionRef.current = predictedWord;
+          lastPredictionTimeRef.current = Date.now();
+
+          addChatMessage(predictedWord, true, true);
+
+          socketService.emit('send_translation', {
+            text: predictedWord,
+            toUserId: selectedUser?._id,
+            fromUserId: currentUser._id,
+            isSign: true,
+          });
+
+          setTimeout(() => {
+            if (lastPredictionRef.current === predictedWord) {
+              setLocalPrediction('');
+            }
+          }, 3000);
         }
       } catch (err) {
         console.error('❌ Erreur API:', err.message);
       } finally {
-        // This ALWAYS runs — lock is always released no matter what path was taken.
+        // FIX: always release the lock — whether success, empty result, or error.
+        // The 300 ms debounce prevents hammering the server on every interval tick.
         setTimeout(() => {
           isProcessingRef.current = false;
           setIsProcessing(false);
@@ -291,22 +291,22 @@ const VideoCall = ({
     [addChatMessage, currentUser?._id, selectedUser?._id]
   );
 
+  // ─── MediaPipe init ──────────────────────────────────────────────────────────
   const initHandDetection = useCallback(async () => {
     if (!localVideoRef.current || !isMountedRef.current) {
       setAiStatus('En attente de la caméra...');
       return;
     }
 
-    // Wait until the video element actually has dimensions.
-    // Sending a zero-size frame to MediaPipe causes a fatal WASM abort.
+    // Wait until the video element has real dimensions before sending frames.
+    // A zero-size frame causes a fatal WASM abort inside MediaPipe.
     const video = localVideoRef.current;
+
     if (video.videoWidth === 0 || video.videoHeight === 0) {
       setAiStatus('En attente de la vidéo...');
+
       await new Promise((resolve) => {
-        // If already playing with dimensions, resolve immediately
-        if (video.videoWidth > 0 && video.videoHeight > 0) {
-          return resolve();
-        }
+        if (video.videoWidth > 0 && video.videoHeight > 0) return resolve();
 
         let resolved = false;
         const done = () => {
@@ -316,21 +316,23 @@ const VideoCall = ({
           resolve();
         };
 
-        // 'playing' fires once the browser starts rendering frames
         video.addEventListener('playing', done, { once: true });
 
-        // Fallback poll every 100ms
         const poll = setInterval(() => {
           if (video.videoWidth > 0 && video.videoHeight > 0) done();
         }, 100);
 
-        // Hard timeout: 8s max
+        // Hard timeout: 8 s
         setTimeout(done, 8000);
       });
     }
 
-    // Double-check after waiting — if still zero, video is not usable
-    if (localVideoRef.current.videoWidth === 0 || localVideoRef.current.videoHeight === 0) {
+    // Double-check — bail out if still zero after waiting
+    if (
+      !localVideoRef.current ||
+      localVideoRef.current.videoWidth === 0 ||
+      localVideoRef.current.videoHeight === 0
+    ) {
       setAiStatus('❌ Vidéo non disponible');
       return;
     }
@@ -355,15 +357,13 @@ const VideoCall = ({
         minTrackingConfidence: 0.5,
       });
 
-      // Initialize MediaPipe fully before registering onResults or sending frames.
       setAiStatus('Chargement du modèle...');
       await hands.initialize();
 
       if (!isMountedRef.current) return;
 
-      // Register onResults AFTER initialize() so it's bound to the loaded model
-      // FIX: onResults is now synchronous — it schedules sendPrediction without
-      // awaiting it, preventing MediaPipe from being stalled by a dangling Promise.
+      // Register onResults AFTER initialize() — binding it before the model
+      // loads means it may reference an uninitialised graph and never fire.
       hands.onResults = (results) => {
         if (!isMountedRef.current || !isAIActiveRef.current) return;
 
@@ -376,15 +376,14 @@ const VideoCall = ({
           const dataAux = [];
 
           for (let i = 0; i < 2; i++) {
-            if (results.multiHandLandmarks && results.multiHandLandmarks[i]) {
+            if (results.multiHandLandmarks[i]) {
               results.multiHandLandmarks[i].forEach((lm) => {
                 dataAux.push(lm.x);
                 dataAux.push(lm.y);
               });
             } else {
-              for (let j = 0; j < 42; j++) {
-                dataAux.push(0);
-              }
+              // Pad missing hand with 42 zeros (21 landmarks × 2 coords)
+              for (let j = 0; j < 42; j++) dataAux.push(0);
             }
           }
 
@@ -396,9 +395,18 @@ const VideoCall = ({
         }
       };
 
-      // FIX: Pass ImageData directly to hands.send() instead of a canvas element.
-      // MediaPipe's onResults silently never fires when given a canvas in some
-      // browser/version combinations. ImageData is the most compatible input type.
+      // ── FIX (root cause of the bug): pass the canvas element directly to
+      // hands.send() — NOT an ImageData object.
+      //
+      // MediaPipe Hands v0.4 (the jsdelivr CDN version) accepts:
+      //   HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
+      //
+      // When an ImageData is passed, MediaPipe silently accepts the call but
+      // its internal graph never invokes onResults — so no predictions fire.
+      // This is why the Network tab showed zero /predict requests even though
+      // the WASM model loaded successfully.
+      //
+      // Solution: draw the video frame onto a canvas and pass the canvas.
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
@@ -414,31 +422,23 @@ const VideoCall = ({
         }
 
         try {
-          const video = localVideoRef.current;
+          const vid = localVideoRef.current;
 
-          if (
-            video.readyState >= 2 &&
-            video.videoWidth > 0 &&
-            video.videoHeight > 0
-          ) {
-            if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
-            if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
+          if (vid.readyState >= 2 && vid.videoWidth > 0 && vid.videoHeight > 0) {
+            if (canvas.width !== vid.videoWidth) canvas.width = vid.videoWidth;
+            if (canvas.height !== vid.videoHeight) canvas.height = vid.videoHeight;
 
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
 
-            // Pass ImageData instead of canvas — triggers onResults reliably
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            await handsRef.current.send({ image: imageData });
+            // FIX: pass the canvas, not ImageData
+            await handsRef.current.send({ image: canvas });
           }
         } catch (error) {
           console.error('[MP] send() error:', error);
         }
       }, 500);
 
-      // Store interval ID so cleanupHands can clear it
-      animationFrameRef.current = detectionInterval;
-      // Show ready status; if server is still waking up, sendPrediction
-      // will block internally until serverReadyRef resolves.
+      detectionIntervalRef.current = detectionInterval;
       setAiStatus('✅ Prêt - Faites des gestes!');
     } catch (error) {
       console.error('Failed to initialize MediaPipe:', error);
@@ -446,9 +446,9 @@ const VideoCall = ({
     }
   }, [cleanupHands, sendPrediction]);
 
+  // ─── Toggle AI ───────────────────────────────────────────────────────────────
   const toggleAIDetection = useCallback(() => {
     const nextActive = !isAIActiveRef.current;
-
     isAIActiveRef.current = nextActive;
     setIsAIActive(nextActive);
 
@@ -461,16 +461,15 @@ const VideoCall = ({
     }
   }, [initHandDetection, cleanupHands]);
 
+  // ─── Call cleanup ────────────────────────────────────────────────────────────
   const cleanupCall = useCallback(
     ({ emitEndCall = true, closeModal = true } = {}) => {
       if (isCleaningUpRef.current) return;
-
       isCleaningUpRef.current = true;
 
       hasAcceptedCallRef.current = false;
       hasReceivedAnswerRef.current = false;
 
-      // Capture before resetting so we can log the end-call message below
       const wasConnected = hasLoggedConnectedRef.current;
       hasLoggedConnectedRef.current = false;
 
@@ -490,7 +489,6 @@ const VideoCall = ({
             console.warn('Error stopping track:', error);
           }
         });
-
         streamRef.current = null;
       }
 
@@ -501,17 +499,11 @@ const VideoCall = ({
         } catch (error) {
           console.warn('Error destroying peer:', error);
         }
-
         peerRef.current = null;
       }
 
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = null;
-      }
-
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = null;
-      }
+      if (localVideoRef.current) localVideoRef.current.srcObject = null;
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
 
       setIncomingCall(null);
       incomingCallRef.current = null;
@@ -526,7 +518,9 @@ const VideoCall = ({
 
       if (emitEndCall && currentUser?._id) {
         const targetUserId =
-          selectedUser?._id || incomingCallRef.current?.fromUserId || incomingCallRef.current?.toUserId;
+          selectedUser?._id ||
+          incomingCallRef.current?.fromUserId ||
+          incomingCallRef.current?.toUserId;
 
         if (targetUserId) {
           socketService.emit('end_call', {
@@ -555,13 +549,14 @@ const VideoCall = ({
   );
 
   // Keep ref in sync so the unmount effect can call cleanupCall
-  // without needing it as a dependency (which would cause re-runs)
+  // without needing it as a dependency (which would cause re-runs).
   cleanupCallRef.current = cleanupCall;
 
   const endCall = useCallback(() => {
     cleanupCall({ emitEndCall: true, closeModal: true });
   }, [cleanupCall]);
 
+  // ─── Media setup ─────────────────────────────────────────────────────────────
   const setupMedia = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -573,8 +568,6 @@ const VideoCall = ({
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
-        // Must call play() explicitly — autoplay alone is not reliable.
-        // Without this, videoWidth stays 0 and MediaPipe aborts.
         try {
           await localVideoRef.current.play();
         } catch (e) {
@@ -590,6 +583,7 @@ const VideoCall = ({
     }
   };
 
+  // ─── Start call ──────────────────────────────────────────────────────────────
   const startCall = async () => {
     if (!currentUser?._id || !selectedUser?._id) {
       toast.error('Utilisateur invalide');
@@ -606,11 +600,7 @@ const VideoCall = ({
     try {
       const stream = await setupMedia();
 
-      const peer = new Peer({
-        initiator: true,
-        trickle: false,
-        stream,
-      });
+      const peer = new Peer({ initiator: true, trickle: false, stream });
 
       let callSignalSent = false;
       peer.on('signal', (signal) => {
@@ -654,12 +644,10 @@ const VideoCall = ({
 
       peer.on('error', (err) => {
         console.error('Peer error:', err);
-
         if (isBenignPeerCloseError(err)) {
           console.warn('Ignoring benign peer close error');
           return;
         }
-
         cleanupCall({ emitEndCall: true, closeModal: true });
       });
 
@@ -682,6 +670,7 @@ const VideoCall = ({
     }
   };
 
+  // ─── Accept call ─────────────────────────────────────────────────────────────
   const acceptCall = async () => {
     if (!incomingCall) return;
 
@@ -696,11 +685,7 @@ const VideoCall = ({
     try {
       const stream = await setupMedia();
 
-      const peer = new Peer({
-        initiator: false,
-        trickle: false,
-        stream,
-      });
+      const peer = new Peer({ initiator: false, trickle: false, stream });
 
       let acceptSignalSent = false;
       peer.on('signal', (signal) => {
@@ -719,7 +704,6 @@ const VideoCall = ({
           remoteVideoRef.current.play().catch(() => {});
         }
 
-        // Only clear incomingCall once the stream is confirmed
         setIncomingCall(null);
         incomingCallRef.current = null;
         setCallStatusSynced('connected');
@@ -738,12 +722,10 @@ const VideoCall = ({
 
       peer.on('error', (err) => {
         console.error('Peer error:', err);
-
         if (isBenignPeerCloseError(err)) {
           console.warn('Ignoring benign peer close error');
           return;
         }
-
         cleanupCall({ emitEndCall: true, closeModal: true });
       });
 
@@ -752,10 +734,7 @@ const VideoCall = ({
       });
 
       peerRef.current = peer;
-
-      // Trigger the WebRTC handshake with the caller's signal
       peer.signal(incomingCall.signal);
-
     } catch (error) {
       console.error('Error accepting call:', error);
       hasAcceptedCallRef.current = false;
@@ -764,10 +743,10 @@ const VideoCall = ({
     }
   };
 
+  // ─── Socket listeners ────────────────────────────────────────────────────────
   useEffect(() => {
     const handleReceiveTranslation = (data) => {
       console.log('📨 Translation reçue:', data);
-
       if (!data?.text) return;
 
       setRemotePrediction(data.text);
@@ -795,12 +774,10 @@ const VideoCall = ({
         peerRef.current.signal(data.signal);
       } catch (err) {
         console.error('Erreur signal call_accepted:', err);
-
         if (isBenignPeerCloseError(err)) {
           console.warn('Ignoring benign signal error after close');
           return;
         }
-
         cleanupCall({ emitEndCall: true, closeModal: true });
       }
     };
@@ -828,22 +805,21 @@ const VideoCall = ({
     };
   }, [addChatMessage, cleanupCall, selectedUser?.firstName, setCallStatusSynced]);
 
+  // ─── Mount / unmount ─────────────────────────────────────────────────────────
   useEffect(() => {
     isMountedRef.current = true;
 
     return () => {
       isMountedRef.current = false;
-      // Use ref to avoid this effect re-running every time cleanupCall changes
-      cleanupCallRef.current?.({
-        emitEndCall: false,
-        closeModal: false,
-      });
+      cleanupCallRef.current?.({ emitEndCall: false, closeModal: false });
     };
-  }, []); // empty deps — runs only on mount/unmount
+  }, []);
 
+  // ─── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="video-call-overlay">
       <div className="video-call-layout">
+        {/* ── Chat panel ── */}
         <div className={`call-chat-panel ${isChatOpen ? 'open' : 'closed'}`}>
           <div className="call-chat-header">
             <div className="call-chat-header-info">
@@ -858,12 +834,10 @@ const VideoCall = ({
                   e.target.src = '/default-avatar.png';
                 }}
               />
-
               <div>
                 <span className="call-chat-name">
                   {selectedUser?.firstName} {selectedUser?.lastName}
                 </span>
-
                 <span className="call-chat-status">
                   {callStatus === 'connected'
                     ? '🟢 Connecté'
@@ -892,7 +866,6 @@ const VideoCall = ({
                   <div className="call-chat-empty">
                     <span>🤟</span>
                     <p>Les traductions gestuelles et messages apparaîtront ici</p>
-
                     <p
                       style={{
                         fontSize: '0.7rem',
@@ -900,18 +873,9 @@ const VideoCall = ({
                         color: isAIActive ? '#2ecc71' : '#e74c3c',
                       }}
                     >
-                      {isAIActive
-                        ? '🟢 Traduction active'
-                        : '⚪ Traduction désactivée'}
+                      {isAIActive ? '🟢 Traduction active' : '⚪ Traduction désactivée'}
                     </p>
-
-                    <p
-                      style={{
-                        fontSize: '0.65rem',
-                        marginTop: '5px',
-                        color: '#888',
-                      }}
-                    >
+                    <p style={{ fontSize: '0.65rem', marginTop: '5px', color: '#888' }}>
                       {aiStatus}
                     </p>
                   </div>
@@ -920,15 +884,12 @@ const VideoCall = ({
                 {chatMessages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={`call-chat-msg ${
-                      msg.isLocal ? 'local' : 'remote'
-                    }`}
+                    className={`call-chat-msg ${msg.isLocal ? 'local' : 'remote'}`}
                   >
                     <div className="call-chat-bubble">
                       {msg.isSign && <span className="sign-badge">🤟</span>}
                       <span className="call-chat-text">{msg.text}</span>
                     </div>
-
                     <div className="call-chat-time">{msg.time}</div>
                   </div>
                 ))}
@@ -944,7 +905,6 @@ const VideoCall = ({
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                 />
-
                 <button
                   type="submit"
                   className="call-chat-send-btn"
@@ -957,8 +917,10 @@ const VideoCall = ({
           )}
         </div>
 
+        {/* ── Video panel ── */}
         <div className="video-call-container">
           <div className="video-grid">
+            {/* Remote video (large) */}
             <div className="video-box">
               <video
                 ref={remoteVideoRef}
@@ -966,7 +928,6 @@ const VideoCall = ({
                 playsInline
                 className="remote-video"
               />
-
               {remotePrediction && (
                 <div className="prediction-overlay peer-tag">
                   🤟 {remotePrediction}
@@ -974,6 +935,7 @@ const VideoCall = ({
               )}
             </div>
 
+            {/* Local video (small) */}
             <div className="video-box local-small">
               <video
                 ref={localVideoRef}
@@ -982,7 +944,6 @@ const VideoCall = ({
                 muted
                 className="local-video"
               />
-
               {localPrediction && (
                 <div className="prediction-overlay my-tag">
                   🤟 {localPrediction}
@@ -1007,13 +968,12 @@ const VideoCall = ({
                   transition: 'all 0.2s',
                 }}
               >
-                {isAIActive
-                  ? '🔴 Désactiver Traduction'
-                  : '🟢 Activer Traduction'}
+                {isAIActive ? '🔴 Désactiver Traduction' : '🟢 Activer Traduction'}
               </button>
             </div>
           </div>
 
+          {/* Controls */}
           <div className="controls-bar">
             {callStatus === 'idle' && (
               <button onClick={startCall} className="btn-call">
