@@ -7,7 +7,10 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import './Styles/VideoCall.css';
 
-const AI_SERVER_URL = 'https://zen-footing-depravity.ngrok-free.dev';
+const AI_SERVER_URLS = [
+  'https://zen-footing-depravity.ngrok-free.dev',
+  'https://modelsigntranslator.onrender.com',
+];
 const NGROK_HEADERS = { 'ngrok-skip-browser-warning': 'true' };
 
 const isBenignPeerCloseError = (err) => {
@@ -71,27 +74,52 @@ const VideoCall = ({
 
   const isCleaningUpRef = useRef(false);
   const cleanupCallRef = useRef(null);
+  const activeAIBaseUrlRef = useRef(AI_SERVER_URLS[0]);
 
   // serverReadyRef holds the wake-up Promise so /predict is never fired
   // before Render.com finishes its cold-start (~40 s on free tier).
   const serverReadyRef = useRef(null);
 
   // ─── Server wake-up ping ────────────────────────────────────────────────────
+  // Pings every URL in AI_SERVER_URLS concurrently; the first to respond
+  // becomes activeAIBaseUrlRef so /predict calls go there immediately.
+  // The remaining URLs are silently probed so the fallback list stays warm.
   useEffect(() => {
+    let cancelled = false;
+
     setAiStatus('⏳ Réveil du serveur IA...');
-    serverReadyRef.current = axios
-      .get(`${AI_SERVER_URL}/`, {
-        timeout: 60000,
-        headers: NGROK_HEADERS,
-      })
-      .then(() => {
-        console.log('✅ AI server is ready');
+
+    serverReadyRef.current = (async () => {
+      // Race all URLs — first healthy response wins.
+      const pingUrl = (baseUrl) =>
+        axios
+          .get(`${baseUrl}/`, { timeout: 20000, headers: NGROK_HEADERS })
+          .then(() => baseUrl);
+
+      const results = await Promise.allSettled(AI_SERVER_URLS.map(pingUrl));
+
+      if (cancelled) return;
+
+      const firstSuccess = results.find((r) => r.status === 'fulfilled');
+
+      if (firstSuccess) {
+        activeAIBaseUrlRef.current = firstSuccess.value;
+        console.log('✅ AI server ready:', firstSuccess.value);
         if (isMountedRef.current) setAiStatus('✅ Serveur prêt');
-      })
-      .catch((err) => {
-        console.warn('⚠️ AI server wake-up failed:', err.message);
-        if (isMountedRef.current) setAiStatus('⚠️ Serveur lent, tentative...');
-      });
+      } else {
+        // All failed — keep the default URL and warn; /predict will retry anyway.
+        const firstErr = results[0].reason;
+        console.warn('⚠️ All AI wake-up attempts failed:', firstErr?.message);
+        throw firstErr || new Error('No AI server reachable');
+      }
+    })().catch((err) => {
+      if (isMountedRef.current) setAiStatus('⚠️ Serveur lent, tentative...');
+      console.warn('⚠️ Server wake-up error:', err?.message);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -130,7 +158,6 @@ const VideoCall = ({
 
     if (handsRef.current) {
       try {
-        handsRef.current.onResults = null;
         handsRef.current.close();
       } catch (error) {
         console.warn('Error closing hands:', error);
@@ -242,19 +269,48 @@ const VideoCall = ({
 
         if (!isMountedRef.current || !isAIActiveRef.current) return;
 
-        const res = await axios.post(
-          `${AI_SERVER_URL}/predict`,
-          { landmarks },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              ...NGROK_HEADERS,
-            },
-            timeout: 60000,
-          }
-        );
+        const candidateUrls = [
+          activeAIBaseUrlRef.current,
+          ...AI_SERVER_URLS.filter((url) => url !== activeAIBaseUrlRef.current),
+        ];
 
-        const predictedWord = res.data.res || res.data.prediction;
+        let res = null;
+        let lastError = null;
+
+        for (const baseUrl of candidateUrls) {
+          try {
+            // Path: POST /predict — verified against server API contract.
+            const attempt = await axios.post(
+              `${baseUrl}/predict`,
+              { landmarks },
+              {
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...NGROK_HEADERS,
+                },
+                timeout: 30000,
+                // Only treat 2xx as success; surface 4xx/5xx as errors.
+                validateStatus: (status) => status >= 200 && status < 300,
+              }
+            );
+            res = attempt;
+            activeAIBaseUrlRef.current = baseUrl;
+            break;
+          } catch (err) {
+            lastError = err;
+            console.warn(
+              `⚠️ Predict failed on ${baseUrl} (status ${err.response?.status ?? 'network'}):`,
+              err.message
+            );
+          }
+        }
+
+        if (!res) throw lastError || new Error('Prediction request failed');
+
+        // Server may return { res: "word" } or { prediction: "word" } depending
+        // on which backend is active — normalise both shapes here.
+        const predictedWord =
+          res.data?.res || res.data?.prediction || res.data?.result || null;
 
         if (
           predictedWord &&
@@ -358,7 +414,7 @@ const VideoCall = ({
       handsRef.current = hands;
 
       hands.setOptions({
-        maxNumHands: 2,
+        maxNumHands: 1,
         modelComplexity: 1,
         minDetectionConfidence: 0.5,
         minTrackingConfidence: 0.5,
@@ -371,36 +427,29 @@ const VideoCall = ({
 
       // Register onResults AFTER initialize() — binding it before the model
       // loads means it may reference an uninitialised graph and never fire.
-      hands.onResults = (results) => {
+      hands.onResults((results) => {
         if (!isMountedRef.current || !isAIActiveRef.current) return;
 
-        const hasHands =
-          results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
+        const firstHand = results.multiHandLandmarks?.[0];
+        const hasHands = Boolean(firstHand);
 
         if (hasHands) {
           setAiStatus('🖐️ Main détectée...');
 
           const dataAux = [];
 
-          for (let i = 0; i < 2; i++) {
-            if (results.multiHandLandmarks[i]) {
-              results.multiHandLandmarks[i].forEach((lm) => {
-                dataAux.push(lm.x);
-                dataAux.push(lm.y);
-              });
-            } else {
-              // Pad missing hand with 42 zeros (21 landmarks × 2 coords)
-              for (let j = 0; j < 42; j++) dataAux.push(0);
-            }
-          }
+          firstHand.forEach((lm) => {
+            dataAux.push(lm.x);
+            dataAux.push(lm.y);
+          });
 
-          if (dataAux.length === 84 && !isProcessingRef.current) {
+          if (dataAux.length === 42 && !isProcessingRef.current) {
             sendPrediction(dataAux);
           }
         } else {
           setAiStatus('🤟 En attente de geste...');
         }
-      };
+      });
 
       // ── FIX (root cause of the bug): pass the canvas element directly to
       // hands.send() — NOT an ImageData object.
@@ -516,6 +565,8 @@ const VideoCall = ({
       incomingCallRef.current = null;
       setLocalPrediction('');
       setRemotePrediction('');
+      lastPredictionRef.current = '';
+      lastPredictionTimeRef.current = 0;
       setCallStatusSynced('idle');
 
       if (wasConnected && !hasLoggedEndedRef.current) {
@@ -607,6 +658,11 @@ const VideoCall = ({
     try {
       const stream = await setupMedia();
 
+      // FIX: start hand detection as soon as local media is available —
+      // detection should not wait for the remote peer to connect.
+      // isAIActiveRef controls whether frames are actually processed.
+      initHandDetection();
+
       const peer = new Peer({ initiator: true, trickle: false, stream });
 
       let callSignalSent = false;
@@ -642,11 +698,6 @@ const VideoCall = ({
           persistCallEventMessage('📞 Video call connected');
         }
 
-        setTimeout(() => {
-          if (isMountedRef.current && isAIActiveRef.current) {
-            initHandDetection();
-          }
-        }, 1000);
       });
 
       peer.on('error', (err) => {
@@ -692,6 +743,10 @@ const VideoCall = ({
     try {
       const stream = await setupMedia();
 
+      // FIX: start hand detection as soon as local media is available —
+      // detection should not wait for the remote peer to connect.
+      initHandDetection();
+
       const peer = new Peer({ initiator: false, trickle: false, stream });
 
       let acceptSignalSent = false;
@@ -720,11 +775,6 @@ const VideoCall = ({
           persistCallEventMessage('📞 Video call connected');
         }
 
-        setTimeout(() => {
-          if (isMountedRef.current && isAIActiveRef.current) {
-            initHandDetection();
-          }
-        }, 1000);
       });
 
       peer.on('error', (err) => {
