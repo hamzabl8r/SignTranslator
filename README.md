@@ -1,70 +1,166 @@
-# Getting Started with Create React App
+# 🖥️ Sign Language Video Call — Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A real-time video call application with **live sign language detection and translation**, built with React. Users can video call each other and have their hand gestures automatically detected, translated, and sent as chat messages to the other participant.
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## ✨ Features
 
-### `npm start`
+- 📹 **WebRTC video calls** — peer-to-peer using `simple-peer`
+- 🤟 **Live sign language detection** — powered by MediaPipe Hands
+- 🔁 **Real-time translation sharing** — predictions sent to the other user via Socket.io
+- 💬 **In-call chat** — text and sign translations side by side
+- 🔀 **Resilient AI server fallback** — auto-switches between Render and ngrok if one fails
+- 🟢 **Early hand detection** — MediaPipe initializes before the call connects for zero-lag detection
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+---
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## 🛠️ Tech Stack
 
-### `npm test`
+| Layer | Technology |
+|---|---|
+| Framework | React 18 |
+| State management | Redux Toolkit |
+| Real-time | Socket.io client |
+| Video/Audio | WebRTC via `simple-peer` |
+| Hand detection | `@mediapipe/hands` (CDN WASM) |
+| HTTP client | Axios |
+| Notifications | react-hot-toast |
+| Build config | craco |
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+---
 
-### `npm run build`
+## 📁 Project Structure
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```
+├── public/
+└── src/
+    ├── component/           # All React components (VideoCall, Chat, etc.)
+    ├── hooks/               # Custom React hooks
+    ├── redux/               # Redux store, slices, actions
+    ├── services/            # socketService and other API singletons
+    ├── App.js
+    ├── App.css
+    ├── index.js
+    └── index.css
+├── .gitignore
+├── config-overrides.js      # Webpack overrides (used with craco)
+├── craco.config.js
+├── package.json
+└── README.md
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+---
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## ⚙️ Environment Variables
 
-### `npm run eject`
+Create a `.env` file at the project root:
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+```env
+REACT_APP_BACKEND_URL=https://backpfe-production-789f.up.railway.app
+REACT_APP_AI_SERVER_URL_1=https://zen-footing-depravity.ngrok-free.dev
+REACT_APP_AI_SERVER_URL_2=https://modelsigntranslator.onrender.com
+```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+---
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## 🚀 Getting Started
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+```bash
+# Clone the repository
+git clone https://github.com/hamzabl8r/SignTranslator.git
+cd SignTranslator
 
-## Learn More
+# Install dependencies
+npm install
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+# Start the development server
+npm start
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+The app will run on `http://localhost:3000`.
 
-### Code Splitting
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## 🔌 Socket Events
 
-### Analyzing the Bundle Size
+| Event (emit) | Payload | Description |
+|---|---|---|
+| `call_user` | `{ fromUserId, toUserId, signal, callerInfo }` | Initiate a call |
+| `accept_call` | `{ toUserId, fromUserId, signal }` | Accept an incoming call |
+| `end_call` | `{ toUserId, fromUserId }` | End/hang up a call |
+| `send_translation` | `{ text, toUserId, fromUserId, isSign }` | Send a translation or chat message |
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+| Event (listen) | Description |
+|---|---|
+| `call_accepted` | Remote peer accepted the call |
+| `call_ended` | Remote peer hung up |
+| `call_rejected` | Remote peer rejected the call |
+| `receive_translation` | Incoming translation or chat message |
 
-### Making a Progressive Web App
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+## 🤟 How Sign Detection Works
 
-### Advanced Configuration
+1. As soon as the user's camera is available, **MediaPipe Hands** initializes and loads the WASM model
+2. Every **500ms**, a video frame is drawn onto a canvas and sent to MediaPipe
+3. If a hand is detected, 21 landmark coordinates (42 values: x, y per point) are extracted
+4. Once the call is **connected**, those landmarks are POSTed to the AI server (`/predict`)
+5. The predicted sign word is displayed as an overlay on the local video and sent to the remote user via Socket.io
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+---
 
-### Deployment
+## 🔁 AI Server Fallback
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+On mount, all AI server URLs are pinged **concurrently**. The first to respond becomes the active server. During calls, if a `/predict` request fails, the next URL in the list is tried automatically — no manual intervention needed.
 
-### `npm run build` fails to minify
+```js
+const AI_SERVER_URLS = [
+  'https://zen-footing-depravity.ngrok-free.dev',  // ngrok (local dev)
+  'https://modelsigntranslator.onrender.com',       // Render (production)
+];
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+---
+
+## 📦 Key Dependencies
+
+```json
+{
+    "@mediapipe/camera_utils": "^0.3.1675466862",
+    "@mediapipe/hands": "^0.4.1675469240",
+    "@reduxjs/toolkit": "^2.11.2",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^13.5.0",
+    "assert": "^2.1.0",
+    "axios": "^1.15.1",
+    "buffer": "^6.0.3",
+    "customize-cra": "^1.0.0",
+    "lucide-react": "^1.8.0",
+    "process": "^0.11.10",
+    "react": "^18.3.1",
+    "react-app-rewired": "^2.2.1",
+    "react-dom": "^18.3.1",
+    "react-helmet-async": "^3.0.0",
+    "react-hot-toast": "^2.6.0",
+    "react-redux": "^9.2.0",
+    "react-router-dom": "^6.30.3",
+    "react-scripts": "5.0.1",
+    "react-webcam": "^7.2.0",
+    "simple-peer": "^9.11.1",
+    "socket.io-client": "^4.8.3",
+    "stream-browserify": "^3.0.0",
+    "util": "^0.12.5",
+    "web-vitals": "^2.1.4"
+  }
+```
+
+---
+
+## 🐛 Known Limitations
+
+- MediaPipe WASM loads from CDN — requires internet access even in local dev
+- Render.com free tier has a ~40s cold start; the app shows a status indicator while waiting
+- WebRTC requires HTTPS in production (or `localhost` in dev)
