@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Webcam from 'react-webcam';
 import { useSelector } from 'react-redux';
+import SeoHelmet from './SeoHelmet';
 import './Styles/Translator.css';
 import './Styles/SignModal.css';
 import './Styles/DatasetUpload.css';
 
 
 
-const API_BASE = "https://zen-footing-depravity.ngrok-free.dev";
+const API_BASE = "https://modelsigntranslator.onrender.com";
 const BACKEND_URL = "https://backpfe-production-789f.up.railway.app";
 const CONTRIBUTE_API_KEY = process.env.REACT_APP_CONTRIBUTE_API_KEY || "";
 const NGROK_HEADERS = { 'ngrok-skip-browser-warning': 'true' };
@@ -792,6 +793,7 @@ const Translator = () => {
 
   return (
     <div className="sd-root">
+      <SeoHelmet title="Translator - MediSign" />
       <div className="sd-shell">
         <header className="sd-topbar">
           <div>

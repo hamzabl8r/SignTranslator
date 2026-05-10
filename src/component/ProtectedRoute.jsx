@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useLocation } from 'react-router-dom';
+import SeoHelmet from './SeoHelmet';
 
 const ProtectedRoute = () => {
     const { token, user } = useSelector((state) => state.user);
@@ -9,17 +10,32 @@ const ProtectedRoute = () => {
     
     
     if (!token) {
-        return <Navigate to="/login" replace />;
+        return (
+          <>
+            <SeoHelmet title="Login Required - MediSign" />
+            <Navigate to="/login" replace />
+          </>
+        );
     }
 
     const mustCompleteGoogleProfile =
       user?.isGoogleAccount && !user?.profileCompleted;
 
     if (mustCompleteGoogleProfile && location.pathname !== '/profil') {
-      return <Navigate to="/profil" replace />;
+      return (
+        <>
+          <SeoHelmet title="Complete Profile - MediSign" />
+          <Navigate to="/profil" replace />
+        </>
+      );
     }
     
-    return <Outlet />;
+    return (
+      <>
+        <SeoHelmet title="Protected Route - MediSign" />
+        <Outlet />
+      </>
+    );
 };
 
 export default ProtectedRoute;

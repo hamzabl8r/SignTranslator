@@ -20,6 +20,7 @@ import toast from "react-hot-toast";
 import VideoCall from "./VideoCall";
 import socketService from "../services/socketService";
 import soundService from "../services/soundService";
+import SeoHelmet from './SeoHelmet';
 import "./Styles/Chat.css";
 
 const Chat = () => {
@@ -360,6 +361,7 @@ const Chat = () => {
 
   return (
     <>
+      <SeoHelmet title="Chat - MediSign" />
       <div className="chat-container">
         <button
           className="menu-btn"

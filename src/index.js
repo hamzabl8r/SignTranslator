@@ -2,6 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Provider } from 'react-redux';
+import { HelmetProvider } from 'react-helmet-async';
 import { store } from './redux/store';
 import './index.css';
 import App from './App';
@@ -12,7 +13,9 @@ window.process = process;
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
-  <Provider store={store}>
-    <App />
-  </Provider>
+  <HelmetProvider>
+    <Provider store={store}>
+      <App />
+    </Provider>
+  </HelmetProvider>
 );

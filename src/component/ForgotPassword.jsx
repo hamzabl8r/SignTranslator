@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { forgotPassword, clearAuthFeedback, clearMessage } from '../redux/Slice/userSlice';
 import './Styles/ForgotAndResetPass.css';
+import SeoHelmet from './SeoHelmet';
 
 const ForgotPassword = () => {
     const [email, setEmail] = useState('');
@@ -33,6 +34,7 @@ const ForgotPassword = () => {
 
     return (
         <div className="auth-container">
+            <SeoHelmet title="Forgot Password - MediSign" />
             <div className="auth-card">
                 <h2>Forgot Password</h2>
                 <p>Enter your email, and we'll send you a link to reset your password.</p>

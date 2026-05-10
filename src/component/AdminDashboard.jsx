@@ -12,6 +12,7 @@ import {
   Send, Image, FileText, Globe, ToggleLeft, ToggleRight,
   Database, Check, X as XIcon, Hourglass
 } from 'lucide-react';
+import SeoHelmet from './SeoHelmet';
 import './Styles/AdminDashboard.css';
 
 const BASE_URL = 'https://backpfe-production-789f.up.railway.app';
@@ -473,10 +474,13 @@ const AdminDashboard = ({ initialTab }) => {
 
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) return (
-    <div className="admin-loader">
-      <div className="loader-spinner" />
-      <p>Chargement du panneau de contrôle...</p>
-    </div>
+    <>
+      <SeoHelmet title="Admin Dashboard - MediSign" />
+      <div className="admin-loader">
+        <div className="loader-spinner" />
+        <p>Chargement du panneau de contrôle...</p>
+      </div>
+    </>
   );
 
   const SortIcon = ({ col }) => (
@@ -487,6 +491,7 @@ const AdminDashboard = ({ initialTab }) => {
 
   return (
     <div className="admin-wrapper">
+      <SeoHelmet title="Admin Dashboard - MediSign" />
       {/* ── Toast ── */}
       {toast && (
         <div className={`admin-toast admin-toast--${toast.type}`}>

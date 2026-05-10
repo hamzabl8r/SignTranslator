@@ -4,6 +4,7 @@ import { useDispatch } from "react-redux";
 import "./Styles/Register.css";
 import { setAuthToken, userLogin, userRegister , userCurrent } from "../redux/Slice/userSlice";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import SeoHelmet from './SeoHelmet';
 
 const Auth = () => {  
   const location = useLocation();
@@ -133,6 +134,7 @@ const Auth = () => {
 
   return (
     <>
+      <SeoHelmet title={isLoginView ? 'Login - MediSign' : 'Register - MediSign'} />
       {isLoginView ? (
         // --- Login Form ---
         <div className="login">

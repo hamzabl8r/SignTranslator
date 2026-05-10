@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchHistory } from '../redux/Slice/userSlice';
 import './Styles/History.css';
+import SeoHelmet from './SeoHelmet';
 
 const TYPE_LABELS = {
   dataset:     'Dataset',
@@ -43,6 +44,7 @@ const History = () => {
 
   return (
     <div className="history-container">
+      <SeoHelmet title="History - MediSign" />
       {/* ── Header ── */}
       <div className="history-header">
         <div>

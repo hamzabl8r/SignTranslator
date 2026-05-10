@@ -3,6 +3,7 @@ import './Styles/Headers.css';
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { logout } from '../redux/Slice/userSlice';
+import SeoHelmet from './SeoHelmet';
 
 const Header = () => {
   const user = useSelector((state) => state.user.user);
@@ -57,6 +58,7 @@ const Header = () => {
 
   return (
     <header className={`navbar ${scrolled ? 'navbar--scrolled' : ''}`}>
+      <SeoHelmet title="Header - MediSign" />
       <div className="nav-inner">
         {/* Logo */}
         <Link to="/" className="nav-logo">

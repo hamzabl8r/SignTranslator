@@ -4,6 +4,7 @@ import Toast from './Toast';
 import { useToast } from '../hooks/useToast';
 import { updateProfilePic, userCurrent, editUser } from '../redux/Slice/userSlice';
 import './Styles/Profile.css';
+import SeoHelmet from './SeoHelmet';
 
 const Profil = () => {
     const [updatePict, setUpdatePict] = useState(false);
@@ -100,6 +101,7 @@ const Profil = () => {
 
     return (
         <>
+            <SeoHelmet title="Profile - MediSign" />
             {toast && (
                 <Toast message={toast.message} type={toast.type} onClose={hideToast} />
             )}

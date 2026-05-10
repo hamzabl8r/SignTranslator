@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { resetPassword, clearMessage } from '../redux/Slice/userSlice';
 import './Styles/ForgotAndResetPass.css';
+import SeoHelmet from './SeoHelmet';
 
 const ResetPassword = () => {
     const [password, setPassword] = useState('');
@@ -42,6 +43,7 @@ const ResetPassword = () => {
     
        return (
     <div className="auth-container">
+        <SeoHelmet title="Reset Password - MediSign" />
         <div className="auth-card">
             <h2>Reset Your Password</h2>
             <p>Please enter your new password below to secure your account.</p>

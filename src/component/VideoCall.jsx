@@ -5,6 +5,7 @@ import { sendMessageSocket } from '../redux/Slice/messageSlice';
 import { Hands } from '@mediapipe/hands';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import SeoHelmet from './SeoHelmet';
 import './Styles/VideoCall.css';
 
 const AI_SERVER_URLS = [
@@ -874,8 +875,10 @@ const VideoCall = ({
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="video-call-overlay">
-      <div className="video-call-layout">
+    <>
+      <SeoHelmet title="Video Call - MediSign" />
+      <div className="video-call-overlay">
+        <div className="video-call-layout">
         {/* ── Chat panel ── */}
         <div className={`call-chat-panel ${isChatOpen ? 'open' : 'closed'}`}>
           <div className="call-chat-header">
@@ -1074,8 +1077,9 @@ const VideoCall = ({
             </button>
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

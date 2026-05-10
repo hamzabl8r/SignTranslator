@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import './Styles/Toast.css';
+import SeoHelmet from './SeoHelmet';
 
 const Toast = ({ message, type, onClose }) => {
     useEffect(() => {
@@ -10,16 +11,19 @@ const Toast = ({ message, type, onClose }) => {
     }, [onClose]);
 
     return (
-        <div className={`toast toast-${type}`}>
-            <div className="toast-icon">
-                {type === 'success' && '✅'}
-                {type === 'error' && '❌'}
-                {type === 'info' && 'ℹ️'}
-                {type === 'warning' && '⚠️'}
+        <>
+            <SeoHelmet title="Toast - MediSign" />
+            <div className={`toast toast-${type}`}>
+                <div className="toast-icon">
+                    {type === 'success' && '✅'}
+                    {type === 'error' && '❌'}
+                    {type === 'info' && 'ℹ️'}
+                    {type === 'warning' && '⚠️'}
+                </div>
+                <div className="toast-message">{message}</div>
+                <button className="toast-close" onClick={onClose}>×</button>
             </div>
-            <div className="toast-message">{message}</div>
-            <button className="toast-close" onClick={onClose}>×</button>
-        </div>
+        </>
     );
 };
 
