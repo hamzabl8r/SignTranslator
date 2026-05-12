@@ -1021,6 +1021,9 @@ const AdminDashboard = ({ initialTab }) => {
                               const barClass = item.f1_score >= 0.95 ? 'classification-bar-fill--high'
                                             : item.f1_score >= 0.80 ? 'classification-bar-fill--mid'
                                             : 'classification-bar-fill--low';
+                              const r = 11;
+                              const circ = 2 * Math.PI * r;
+                              const offset = circ - (item.f1_score || 0) * circ;
                               return (
                                 <div className="classification-bar-row" key={item.label}>
                                   <span className="classification-bar-row__label" title={item.label}>
@@ -1029,9 +1032,26 @@ const AdminDashboard = ({ initialTab }) => {
                                   <div className="classification-bar-track">
                                     <div className={`classification-bar-fill ${barClass}`} style={{ width: `${width}%` }} />
                                   </div>
+                                  <div className="classification-bar-row__circle">
+                                    <svg width="30" height="30" viewBox="0 0 30 30">
+                                      <circle cx="15" cy="15" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
+                                      <circle cx="15" cy="15" r={r} fill="none"
+                                        stroke={item.f1_score >= 0.95 ? '#22c55e' : item.f1_score >= 0.80 ? '#f59e0b' : '#ef4444'}
+                                        strokeWidth="3"
+                                        strokeLinecap="round"
+                                        strokeDasharray={circ}
+                                        strokeDashoffset={offset}
+                                        transform="rotate(-90 15 15)"
+                                        style={{ transition: 'stroke-dashoffset 0.8s ease' }}
+                                      />
+                                      <text x="15" y="15" textAnchor="middle" dominantBaseline="central"
+                                        fill="var(--text-secondary)" fontSize="8" fontWeight="600">
+                                        {(item.f1_score * 100).toFixed(0)}
+                                      </text>
+                                    </svg>
+                                  </div>
                                   <span className={`classification-bar-row__score ${scoreClass}`}>
                                     {(item.f1_score * 100).toFixed(1)}%
-                                    <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 4 }}>F1</span>
                                   </span>
                                 </div>
                               );
