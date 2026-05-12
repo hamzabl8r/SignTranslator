@@ -991,27 +991,77 @@ const AdminDashboard = ({ initialTab }) => {
 
                   {!classificationLoading && !classificationError && classificationMetrics && (
                     <>
-                      <div className="classification-metrics-grid">
-                        {[
-                          { label: 'Accuracy', value: `${((classificationMetrics.accuracy || 0) * 100).toFixed(2)}%`, icon: <CheckCircle size={20} />, color: 'green' },
-                          { label: 'Macro F1', value: `${((classificationMetrics.macro_avg?.f1_score || 0) * 100).toFixed(2)}%`, icon: <BarChart2 size={20} />, color: 'blue' },
-                          { label: 'Weighted F1', value: `${((classificationMetrics.weighted_avg?.f1_score || 0) * 100).toFixed(2)}%`, icon: <Activity size={20} />, color: 'purple' },
-                          { label: 'Samples Test', value: classificationMetrics.test_sample_count || 0, icon: <Database size={20} />, color: 'teal' },
-                        ].map(({ label, value, icon, color }) => (
-                          <div className="classification-metric-card" key={label}>
-                            <div className={`classification-metric-card__icon ${color}`}>{icon}</div>
-                            <div className="classification-metric-card__value">{value}</div>
-                            <div className="classification-metric-card__label">{label}</div>
+                      {/* 50/50 layout: donut + bars side by side */}
+                      <div className="classification-split">
+                        {/* Left: Big donut */}
+                        <div className="classification-donut-wrapper">
+                          <div className="classification-donut-chart">
+                            <svg width="220" height="220" viewBox="0 0 220 220">
+                              {(() => {
+                                const cx = 110, cy = 110;
+                                const rings = [
+                                  { r: 82, sw: 13, value: classificationMetrics.accuracy || 0, color: '#3b82f6', label: 'Accuracy' },
+                                  { r: 66, sw: 13, value: classificationMetrics.macro_avg?.f1_score || 0, color: '#8b5cf6', label: 'Macro F1' },
+                                  { r: 50, sw: 13, value: classificationMetrics.weighted_avg?.f1_score || 0, color: '#14b8a6', label: 'Weighted F1' },
+                                ];
+                                return rings.map(({ r, sw, value, color }) => {
+                                  const circ = 2 * Math.PI * r;
+                                  const offset = circ - value * circ;
+                                  return (
+                                    <g key={color}>
+                                      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={sw} />
+                                      <circle cx={cx} cy={cy} r={r} fill="none"
+                                        stroke={color} strokeWidth={sw} strokeLinecap="round"
+                                        strokeDasharray={circ} strokeDashoffset={offset}
+                                        transform="rotate(-90 110 110)"
+                                        style={{ transition: 'stroke-dashoffset 1s ease' }}
+                                      />
+                                    </g>
+                                  );
+                                });
+                              })()}
+                              <text x="110" y="104" textAnchor="middle" fill="var(--text)"
+                                fontSize="28" fontWeight="700"
+                                style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {((classificationMetrics.accuracy || 0) * 100).toFixed(1)}%
+                              </text>
+                              <text x="110" y="126" textAnchor="middle" fill="var(--muted)" fontSize="11">
+                                Accuracy
+                              </text>
+                            </svg>
                           </div>
-                        ))}
-                      </div>
+                          <div className="classification-donut-legend">
+                            <div className="classification-donut-legend__item">
+                              <span className="classification-donut-legend__dot" style={{ background: '#3b82f6' }} />
+                              <span className="classification-donut-legend__label">Accuracy</span>
+                              <span className="classification-donut-legend__value">{((classificationMetrics.accuracy || 0) * 100).toFixed(2)}%</span>
+                            </div>
+                            <div className="classification-donut-legend__item">
+                              <span className="classification-donut-legend__dot" style={{ background: '#8b5cf6' }} />
+                              <span className="classification-donut-legend__label">Macro F1</span>
+                              <span className="classification-donut-legend__value">{((classificationMetrics.macro_avg?.f1_score || 0) * 100).toFixed(2)}%</span>
+                            </div>
+                            <div className="classification-donut-legend__item">
+                              <span className="classification-donut-legend__dot" style={{ background: '#14b8a6' }} />
+                              <span className="classification-donut-legend__label">Weighted F1</span>
+                              <span className="classification-donut-legend__value">{((classificationMetrics.weighted_avg?.f1_score || 0) * 100).toFixed(2)}%</span>
+                            </div>
+                            <div className="classification-donut-legend__divider" />
+                            <div className="classification-donut-legend__item">
+                              <Database size={14} style={{ color: 'var(--muted)' }} />
+                              <span className="classification-donut-legend__label">Test Samples</span>
+                              <span className="classification-donut-legend__value">{classificationMetrics.test_sample_count || 0}</span>
+                            </div>
+                            <div className="classification-donut-legend__item">
+                              <BarChart2 size={14} style={{ color: 'var(--muted)' }} />
+                              <span className="classification-donut-legend__label">Features</span>
+                              <span className="classification-donut-legend__value">{classificationMetrics.feature_count || 0}</span>
+                            </div>
+                          </div>
+                        </div>
 
-                      <div className="classification-classes-section">
-                        <h4>
-                          <BarChart2 size={16} />
-                          F1-score par classe
-                          <span>({classificationMetrics.per_class?.length || 0} classes)</span>
-                        </h4>
+                        {/* Right: Per-class bars */}
+                        <div className="classification-classes-section">
 
                         {Array.isArray(classificationMetrics.per_class) && classificationMetrics.per_class.length > 0 ? (
                           <div>
@@ -1067,17 +1117,6 @@ const AdminDashboard = ({ initialTab }) => {
                           </p>
                         )}
                       </div>
-
-                      <div className="classification-model-info">
-                        <span className="classification-model-info__item">
-                          <Database size={13} /> Échantillons : <strong>{classificationMetrics.sample_count}</strong>
-                        </span>
-                        <span className="classification-model-info__item">
-                          <BarChart2 size={13} /> Caractéristiques : <strong>{classificationMetrics.feature_count}</strong>
-                        </span>
-                        <span className="classification-model-info__item">
-                          <Activity size={13} /> Exactitude globale : <strong>{((classificationMetrics.accuracy || 0) * 100).toFixed(2)}%</strong>
-                        </span>
                       </div>
 
                       {/* ── History Chart ── */}
