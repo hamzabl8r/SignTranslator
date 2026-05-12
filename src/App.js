@@ -15,6 +15,7 @@ import ResetPassword from './component/ResetPassword';
 import ProtectedRoute from './component/ProtectedRoute';
 import Chat from './component/Chat';
 import AdminDashboard from './component/AdminDashboard';
+import HelloWorld from './component/HelloWorld';
 import process from 'process';
 import { Buffer } from 'buffer';
 
@@ -63,6 +64,7 @@ const App = () => {
         <Route path="/register" element={<><Auth /></>} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/hello" element={<HelloWorld />} />
 
         <Route element={<ProtectedRoute />}>
           <Route path="/translator" element={<><Header /><Translator /></>} />
@@ -75,6 +77,7 @@ const App = () => {
           <Route path="/admin" element={<><Header /><AdminDashboard /></>} />
           <Route path="/admin/users" element={<><Header /><AdminDashboard initialTab="users" /></>} />
           <Route path="/admin/datasets" element={<><Header /><AdminDashboard initialTab="datasets" /></>} />
+          <Route path="/admin/classification" element={<><Header /><AdminDashboard initialTab="classification" /></>} />
           <Route path="/admin/activity" element={<><Header /><AdminDashboard initialTab="activity" /></>} />
           <Route path="/admin/notifications" element={<><Header /><AdminDashboard initialTab="notifications" /></>} />
           <Route path="/admin/settings" element={<><Header /><AdminDashboard initialTab="settings" /></>} />

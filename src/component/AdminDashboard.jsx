@@ -16,12 +16,14 @@ import SeoHelmet from './SeoHelmet';
 import './Styles/AdminDashboard.css';
 
 const BASE_URL = 'https://backpfe-production-789f.up.railway.app';
+const AI_METRICS_URL = process.env.REACT_APP_AI_BASE_URL || 'https://modelsigntranslator.onrender.com';
 
 // Map URL paths to tab ids
 const PATH_TO_TAB = {
   '/admin':              'overview',
   '/admin/users':        'users',
   '/admin/datasets':     'datasets',
+  '/admin/classification':'classification',
   '/admin/activity':     'activity',
   '/admin/notifications':'notifications',
   '/admin/settings':     'settings',
@@ -31,6 +33,7 @@ const TAB_TO_PATH = {
   overview:      '/admin',
   users:         '/admin/users',
   datasets:      '/admin/datasets',
+  classification:'/admin/classification',
   activity:      '/admin/activity',
   notifications: '/admin/notifications',
   settings:      '/admin/settings',
@@ -96,6 +99,13 @@ const AdminDashboard = ({ initialTab }) => {
   const [rejectReason, setRejectReason]             = useState('');
   const [showRejectModal, setShowRejectModal]       = useState(false);
   const [datasetToReject, setDatasetToReject]       = useState(null);
+
+  // ── Classification State ──────────────────────────────────────────────────
+  const [classificationMetrics, setClassificationMetrics] = useState(null);
+  const [classificationLoading, setClassificationLoading] = useState(false);
+  const [classificationError, setClassificationError] = useState('');
+  const [classificationHistory, setClassificationHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const showToast = useCallback((message, type = 'success') => {
@@ -181,6 +191,30 @@ const AdminDashboard = ({ initialTab }) => {
     }
   }, [showToast, getAuthHeader]);
 
+  const fetchClassificationMetrics = useCallback(async () => {
+    setClassificationLoading(true);
+    setClassificationError('');
+
+    try {
+      const res = await axios.get(`${AI_METRICS_URL}/classification`, {
+        params: { _t: Date.now() },
+      });
+      setClassificationMetrics(res.data || null);
+    } catch (error) {
+      setClassificationMetrics(null);
+      const status = error?.response?.status;
+      const detail = error?.response?.data?.detail;
+
+      if (status === 404) {
+        setClassificationError('Route /classification introuvable sur le backend IA. Redeployez sign-language-core avec la nouvelle route et train_metrics.json.');
+      } else {
+        setClassificationError(detail || 'Impossible de charger les metriques de classification.');
+      }
+    } finally {
+      setClassificationLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchUsers();
     fetchStats();
@@ -190,6 +224,27 @@ const AdminDashboard = ({ initialTab }) => {
   useEffect(() => {
     if (activeTab === 'datasets') fetchDatasets();
   }, [activeTab, fetchDatasets]);
+
+  const fetchClassificationHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await axios.get(`${AI_METRICS_URL}/classification/history`, {
+        params: { _t: Date.now() },
+      });
+      setClassificationHistory(res.data?.history || []);
+    } catch {
+      setClassificationHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'classification') {
+      fetchClassificationMetrics();
+      fetchClassificationHistory();
+    }
+  }, [activeTab, fetchClassificationMetrics, fetchClassificationHistory]);
 
   // ── Dataset actions ───────────────────────────────────────────────────────
   const approveDataset = async (datasetId) => {
@@ -512,6 +567,7 @@ const AdminDashboard = ({ initialTab }) => {
             { id: 'overview',      icon: <LayoutDashboard size={20}/>, label: 'Dashboard' },
             { id: 'users',         icon: <Users size={20}/>,           label: 'Utilisateurs' },
             { id: 'datasets',      icon: <Database size={20}/>,        label: 'Datasets', badge: datasetCounts.pending || null },
+            { id: 'classification',icon: <BarChart2 size={20}/>,       label: 'Classification' },
             { id: 'activity',      icon: <Activity size={20}/>,        label: 'Activités' },
             { id: 'notifications', icon: <Bell size={20}/>,            label: 'Notifications' },
             { id: 'settings',      icon: <Settings size={20}/>,        label: 'Paramètres' },
@@ -543,6 +599,7 @@ const AdminDashboard = ({ initialTab }) => {
             <h2>
               {{ overview: 'Tableau de Bord', users: 'Gestion des Utilisateurs',
                  datasets: 'Validation des Datasets',
+                 classification: 'Classification',
                  activity: 'Activités Récentes', notifications: 'Notifications',
                  settings: 'Paramètres' }[activeTab]}
             </h2>
@@ -901,6 +958,275 @@ const AdminDashboard = ({ initialTab }) => {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ════════ CLASSIFICATION ════════ */}
+          {activeTab === 'classification' && (
+            <div className="classification-section">
+              <div className="classification-card">
+                <div className="classification-card__strip" />
+                <div className="classification-card__body">
+
+                  <div className="classification-card__header">
+                    <h3><BarChart2 size={20} /> Résultats de classification</h3>
+                    <button className="refresh-btn" onClick={fetchClassificationMetrics}>
+                      <RefreshCw size={16} /> Rafraîchir
+                    </button>
+                  </div>
+
+                  {classificationLoading && (
+                    <div className="classification-loading">
+                      <div className="loader-spinner" />
+                      <span>Chargement des métriques...</span>
+                    </div>
+                  )}
+
+                  {classificationError && (
+                    <div className="classification-error">
+                      <AlertCircle size={16} />
+                      <span>{classificationError}</span>
+                    </div>
+                  )}
+
+                  {!classificationLoading && !classificationError && classificationMetrics && (
+                    <>
+                      <div className="classification-metrics-grid">
+                        {[
+                          { label: 'Accuracy', value: `${((classificationMetrics.accuracy || 0) * 100).toFixed(2)}%`, icon: <CheckCircle size={20} />, color: 'green' },
+                          { label: 'Macro F1', value: `${((classificationMetrics.macro_avg?.f1_score || 0) * 100).toFixed(2)}%`, icon: <BarChart2 size={20} />, color: 'blue' },
+                          { label: 'Weighted F1', value: `${((classificationMetrics.weighted_avg?.f1_score || 0) * 100).toFixed(2)}%`, icon: <Activity size={20} />, color: 'purple' },
+                          { label: 'Samples Test', value: classificationMetrics.test_sample_count || 0, icon: <Database size={20} />, color: 'teal' },
+                        ].map(({ label, value, icon, color }) => (
+                          <div className="classification-metric-card" key={label}>
+                            <div className={`classification-metric-card__icon ${color}`}>{icon}</div>
+                            <div className="classification-metric-card__value">{value}</div>
+                            <div className="classification-metric-card__label">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="classification-classes-section">
+                        <h4>
+                          <BarChart2 size={16} />
+                          F1-score par classe
+                          <span>({classificationMetrics.per_class?.length || 0} classes)</span>
+                        </h4>
+
+                        {Array.isArray(classificationMetrics.per_class) && classificationMetrics.per_class.length > 0 ? (
+                          <div>
+                            {classificationMetrics.per_class.slice(0, 15).map((item) => {
+                              const width = Math.max(2, Math.min(100, (item.f1_score || 0) * 100));
+                              const scoreClass = item.f1_score >= 0.95 ? 'high' : item.f1_score >= 0.80 ? 'mid' : 'low';
+                              const barClass = item.f1_score >= 0.95 ? 'classification-bar-fill--high'
+                                            : item.f1_score >= 0.80 ? 'classification-bar-fill--mid'
+                                            : 'classification-bar-fill--low';
+                              return (
+                                <div className="classification-bar-row" key={item.label}>
+                                  <span className="classification-bar-row__label" title={item.label}>
+                                    {item.label}
+                                  </span>
+                                  <div className="classification-bar-track">
+                                    <div className={`classification-bar-fill ${barClass}`} style={{ width: `${width}%` }} />
+                                  </div>
+                                  <span className={`classification-bar-row__score ${scoreClass}`}>
+                                    {(item.f1_score * 100).toFixed(1)}%
+                                    <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 4 }}>F1</span>
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p style={{ color: 'var(--muted)', fontSize: 13 }}>Aucune classe disponible.</p>
+                        )}
+
+                        {Array.isArray(classificationMetrics.per_class) && classificationMetrics.per_class.length > 15 && (
+                          <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 12, marginTop: 12 }}>
+                            +{classificationMetrics.per_class.length - 15} autres classes
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="classification-model-info">
+                        <span className="classification-model-info__item">
+                          <Database size={13} /> Échantillons : <strong>{classificationMetrics.sample_count}</strong>
+                        </span>
+                        <span className="classification-model-info__item">
+                          <BarChart2 size={13} /> Caractéristiques : <strong>{classificationMetrics.feature_count}</strong>
+                        </span>
+                        <span className="classification-model-info__item">
+                          <Activity size={13} /> Exactitude globale : <strong>{((classificationMetrics.accuracy || 0) * 100).toFixed(2)}%</strong>
+                        </span>
+                      </div>
+
+                      {/* ── History Chart ── */}
+                      <div className="classification-history-section">
+                        <div className="classification-history-header">
+                          <h4>
+                            <TrendingUp size={16} />
+                            Historique 10 jours
+                          </h4>
+                          {historyLoading && <div className="loader-spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />}
+                        </div>
+
+                        {classificationHistory.length > 0 ? (
+                          <>
+                            {/* Mini KPI row */}
+                            <div className="classification-history-kpis">
+                              <div className="classification-history-kpi">
+                                <span className="classification-history-kpi__label">Dernière accuracy</span>
+                                <span className="classification-history-kpi__value" style={{ color: '#22c55e' }}>
+                                  {((classificationHistory[0]?.accuracy || 0) * 100).toFixed(2)}%
+                                </span>
+                              </div>
+                              <div className="classification-history-kpi">
+                                <span className="classification-history-kpi__label">Évolution</span>
+                                <span className="classification-history-kpi__value">
+                                  {classificationHistory.length > 1 ? (() => {
+                                    const delta = (classificationHistory[0]?.accuracy || 0) - (classificationHistory[classificationHistory.length - 1]?.accuracy || 0);
+                                    const sign = delta >= 0 ? '+' : '';
+                                    return <span style={{ color: delta >= 0 ? '#22c55e' : '#ef4444' }}>{sign}{(delta * 100).toFixed(2)}%</span>;
+                                  })() : '—'}
+                                </span>
+                              </div>
+                              <div className="classification-history-kpi">
+                                <span className="classification-history-kpi__label">Points</span>
+                                <span className="classification-history-kpi__value">{classificationHistory.length}</span>
+                              </div>
+                            </div>
+
+                            {/* SVG Line Chart */}
+                            {classificationHistory.length > 1 ? (
+                              <div className="classification-chart-container">
+                                <svg
+                                  viewBox={`0 0 ${Math.max(300, classificationHistory.length * 60)} 200`}
+                                  preserveAspectRatio="xMidYMid meet"
+                                  className="classification-chart-svg"
+                                >
+                                  {/* Grid lines */}
+                                  {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
+                                    const y = 180 - frac * 150;
+                                    return (
+                                      <g key={frac}>
+                                        <line x1="0" y1={y} x2="100%" y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+                                        <text x="5" y={y + 4} fill="var(--muted)" fontSize="9">{(frac * 100).toFixed(0)}%</text>
+                                      </g>
+                                    );
+                                  })}
+
+                                  {/* Accuracy line */}
+                                                  <polyline
+                                    fill="none"
+                                    stroke="#3b82f6"
+                                    strokeWidth="2"
+                                    strokeLinejoin="round"
+                                    strokeLinecap="round"
+                                    points={classificationHistory.map((entry, i) => {
+                                      const x = 50 + (i / Math.max(1, classificationHistory.length - 1)) * (Math.max(300, classificationHistory.length * 60) - 70);
+                                      const y = 180 - (entry.accuracy || 0) * 150;
+                                      return `${x},${y}`;
+                                    }).join(' ')}
+                                  />
+
+                                  {/* Macro F1 line */}
+                                  <polyline
+                                    fill="none"
+                                    stroke="#8b5cf6"
+                                    strokeWidth="2"
+                                    strokeLinejoin="round"
+                                    strokeLinecap="round"
+                                    strokeDasharray="4 3"
+                                    points={classificationHistory.map((entry, i) => {
+                                      const x = 50 + (i / Math.max(1, classificationHistory.length - 1)) * (Math.max(300, classificationHistory.length * 60) - 70);
+                                      const y = 180 - (entry.macro_f1 || 0) * 150;
+                                      return `${x},${y}`;
+                                    }).join(' ')}
+                                  />
+
+                                  {/* Dots + date labels */}
+                                  {classificationHistory.map((entry, i) => {
+                                    const x = 50 + (i / Math.max(1, classificationHistory.length - 1)) * (Math.max(300, classificationHistory.length * 60) - 70);
+                                    const ay = 180 - (entry.accuracy || 0) * 150;
+                                    const fy = 180 - (entry.macro_f1 || 0) * 150;
+                                    const date = new Date(entry.timestamp);
+                                    const label = date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+                                    return (
+                                      <g key={i}>
+                                        <circle cx={x} cy={ay} r="3.5" fill="#3b82f6" stroke="#1e293b" strokeWidth="1.5" />
+                                        <circle cx={x} cy={fy} r="3.5" fill="#8b5cf6" stroke="#1e293b" strokeWidth="1.5" />
+                                        {i % 2 === 0 && (
+                                          <text x={x} y="198" fill="var(--muted)" fontSize="8" textAnchor="middle">
+                                            {label}
+                                          </text>
+                                        )}
+                                      </g>
+                                    );
+                                  })}
+
+                                  {/* Legend */}
+                                  <g transform={`translate(${Math.max(300, classificationHistory.length * 60) - 140}, 10)`}>
+                                    <line x1="0" y1="5" x2="20" y2="5" stroke="#3b82f6" strokeWidth="2" />
+                                    <text x="25" y="9" fill="var(--text-secondary)" fontSize="9">Accuracy</text>
+                                    <line x1="0" y1="20" x2="20" y2="20" stroke="#8b5cf6" strokeWidth="2" strokeDasharray="4 3" />
+                                    <text x="25" y="24" fill="var(--text-secondary)" fontSize="9">Macro F1</text>
+                                  </g>
+                                </svg>
+                              </div>
+                            ) : (
+                              <div className="classification-history-single">
+                                <Clock size={32} />
+                                <p>Un seul point de donnée pour l'instant.</p>
+                                <span>L'historique s'enrichit à chaque réentraînement du modèle.</span>
+                              </div>
+                            )}
+
+                            {/* History table */}
+                            <div className="classification-history-table-wrap">
+                              <table className="classification-history-table">
+                                <thead>
+                                  <tr>
+                                    <th>Date</th>
+                                    <th>Accuracy</th>
+                                    <th>Macro F1</th>
+                                    <th>Weighted F1</th>
+                                    <th>Classes</th>
+                                    <th>Échantillons</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {classificationHistory.slice(0, 10).map((entry, i) => {
+                                    const date = new Date(entry.timestamp);
+                                    const dateStr = date.toLocaleDateString('fr-FR', {
+                                      day: '2-digit', month: 'short', year: 'numeric',
+                                      hour: '2-digit', minute: '2-digit',
+                                    });
+                                    return (
+                                      <tr key={i}>
+                                        <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{dateStr}</td>
+                                        <td>{(entry.accuracy * 100).toFixed(2)}%</td>
+                                        <td>{(entry.macro_f1 * 100).toFixed(2)}%</td>
+                                        <td>{(entry.weighted_f1 * 100).toFixed(2)}%</td>
+                                        <td>{entry.class_count || '—'}</td>
+                                        <td>{entry.sample_count || '—'}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="classification-history-empty">
+                            <Clock size={28} />
+                            <p>Aucun historique disponible. L'historique se remplit à chaque entraînement.</p>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
