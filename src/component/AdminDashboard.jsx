@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
@@ -106,6 +106,8 @@ const AdminDashboard = ({ initialTab }) => {
   const [classificationError, setClassificationError] = useState('');
   const [classificationHistory, setClassificationHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [nextRefresh, setNextRefresh] = useState(86400); // 24h countdown in seconds
+  const refreshTimerRef = useRef(null);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const showToast = useCallback((message, type = 'success') => {
@@ -243,7 +245,27 @@ const AdminDashboard = ({ initialTab }) => {
     if (activeTab === 'classification') {
       fetchClassificationMetrics();
       fetchClassificationHistory();
+      setNextRefresh(86400);
     }
+  }, [activeTab, fetchClassificationMetrics, fetchClassificationHistory]);
+
+  // Auto-refresh every 24h
+  useEffect(() => {
+    if (activeTab !== 'classification') {
+      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+      return;
+    }
+    refreshTimerRef.current = setInterval(() => {
+      setNextRefresh(prev => {
+        if (prev <= 1) {
+          fetchClassificationMetrics();
+          fetchClassificationHistory();
+          return 86400;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(refreshTimerRef.current);
   }, [activeTab, fetchClassificationMetrics, fetchClassificationHistory]);
 
   // ── Dataset actions ───────────────────────────────────────────────────────
@@ -970,9 +992,17 @@ const AdminDashboard = ({ initialTab }) => {
 
                   <div className="classification-card__header">
                     <h3><BarChart2 size={20} /> Résultats de classification</h3>
-                    <button className="refresh-btn" onClick={fetchClassificationMetrics}>
-                      <RefreshCw size={16} /> Rafraîchir
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span className="classification-auto-refresh">
+                        <RefreshCw size={12} />
+                        {nextRefresh > 0
+                          ? `Prochain rafraîchissement dans ${Math.floor(nextRefresh / 3600)}h ${Math.floor((nextRefresh % 3600) / 60)}m`
+                          : 'Mise à jour...'}
+                      </span>
+                      <button className="refresh-btn" onClick={() => { fetchClassificationMetrics(); fetchClassificationHistory(); }}>
+                        <RefreshCw size={16} /> Rafraîchir
+                      </button>
+                    </div>
                   </div>
 
                   {classificationLoading && (
@@ -991,45 +1021,63 @@ const AdminDashboard = ({ initialTab }) => {
 
                   {!classificationLoading && !classificationError && classificationMetrics && (
                     <>
-                      {/* 50/50 layout: histogram + bars side by side */}
-                      <div className="classification-split">
-                        {/* Left: Histogram */}
-                        <div className="classification-histogram-wrapper">
-                          <h4 className="classification-histogram-title">
-                            <BarChart2 size={16} /> Métriques globales
-                          </h4>
-                          <div className="classification-histogram">
-                            {[
-                              { label: 'Accuracy', value: classificationMetrics.accuracy || 0, color: '#3b82f6', suffix: '%' },
-                              { label: 'Macro\nF1', value: classificationMetrics.macro_avg?.f1_score || 0, color: '#8b5cf6', suffix: '%' },
-                              { label: 'Weighted\nF1', value: classificationMetrics.weighted_avg?.f1_score || 0, color: '#14b8a6', suffix: '%' },
-                            ].map(({ label, value, color, suffix }) => {
-                              const pct = (value * 100).toFixed(1);
-                              const barH = Math.max(4, value * 160);
-                              return (
-                                <div className="classification-histogram__col" key={label}>
-                                  <span className="classification-histogram__val">{pct}{suffix}</span>
-                                  <div className="classification-histogram__track">
-                                    <div className="classification-histogram__bar"
-                                      style={{ height: `${barH}px`, background: color }}
-                                    />
-                                  </div>
-                                  <span className="classification-histogram__lbl">
-                                    {label.split('\n').map((l, i) => <span key={i}>{l}</span>)}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          <div className="classification-histogram-footer">
-                            <span><Database size={12} /> Échantillons : <strong>{classificationMetrics.sample_count}</strong></span>
-                            <span><BarChart2 size={12} /> Caractéristiques : <strong>{classificationMetrics.feature_count}</strong></span>
-                            <span><Activity size={12} /> Test : <strong>{classificationMetrics.test_sample_count}</strong></span>
+                      {/* ── 10-Day Histogram ── */}
+                      <div className="classification-10day">
+                        <div className="classification-10day-header">
+                          <h4><BarChart2 size={16} /> Histogramme 10 jours</h4>
+                          <div className="classification-10day-legend">
+                            <span><span className="cls-legend-dot" style={{ background: '#3b82f6' }} /> Accuracy</span>
+                            <span><span className="cls-legend-dot" style={{ background: '#8b5cf6' }} /> Macro F1</span>
+                            <span><span className="cls-legend-dot" style={{ background: '#14b8a6' }} /> Weighted F1</span>
                           </div>
                         </div>
 
-                        {/* Right: Per-class bars */}
-                        <div className="classification-classes-section">
+                        {classificationHistory.length > 0 ? (
+                          <div className="cls-histogram-scroll">
+                            <div className="cls-histogram">
+                              {/* Y-axis labels */}
+                              <div className="cls-histogram-y">
+                                {[100, 80, 60, 40, 20, 0].map(v => (
+                                  <span key={v} className="cls-histogram-y-label">{v}%</span>
+                                ))}
+                              </div>
+                              {/* Bars */}
+                              <div className="cls-histogram-bars">
+                                {classificationHistory.slice(0, 10).map((entry, i) => {
+                                  const date = new Date(entry.timestamp);
+                                  const day = date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+                                  const acc = (entry.accuracy || 0) * 100;
+                                  const macro = (entry.macro_f1 || 0) * 100;
+                                  const weighted = (entry.weighted_f1 || 0) * 100;
+                                  return (
+                                    <div className="cls-histogram-bar-group" key={i}>
+                                      <div className="cls-histogram-bars-inner">
+                                        <div className="cls-histogram-bar" style={{ height: `${acc}%`, background: '#3b82f6' }} title={`Accuracy: ${acc.toFixed(1)}%`} />
+                                        <div className="cls-histogram-bar" style={{ height: `${macro}%`, background: '#8b5cf6' }} title={`Macro F1: ${macro.toFixed(1)}%`} />
+                                        <div className="cls-histogram-bar" style={{ height: `${weighted}%`, background: '#14b8a6' }} title={`Weighted F1: ${weighted.toFixed(1)}%`} />
+                                      </div>
+                                      <span className="cls-histogram-x-label">{day}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="cls-histogram-empty">
+                            <Clock size={24} />
+                            <p>En attente des données d'historique...</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ── Per-class F1 bars ── */}
+                      <div className="classification-classes-section">
+                        <h4>
+                          <BarChart2 size={16} />
+                          F1-score par classe
+                          <span>({classificationMetrics.per_class?.length || 0} classes)</span>
+                        </h4>
 
                         {Array.isArray(classificationMetrics.per_class) && classificationMetrics.per_class.length > 0 ? (
                           <div>
@@ -1044,9 +1092,7 @@ const AdminDashboard = ({ initialTab }) => {
                               const offset = circ - (item.f1_score || 0) * circ;
                               return (
                                 <div className="classification-bar-row" key={item.label}>
-                                  <span className="classification-bar-row__label" title={item.label}>
-                                    {item.label}
-                                  </span>
+                                  <span className="classification-bar-row__label" title={item.label}>{item.label}</span>
                                   <div className="classification-bar-track">
                                     <div className={`classification-bar-fill ${barClass}`} style={{ width: `${width}%` }} />
                                   </div>
@@ -1055,13 +1101,10 @@ const AdminDashboard = ({ initialTab }) => {
                                       <circle cx="15" cy="15" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
                                       <circle cx="15" cy="15" r={r} fill="none"
                                         stroke={item.f1_score >= 0.95 ? '#22c55e' : item.f1_score >= 0.80 ? '#f59e0b' : '#ef4444'}
-                                        strokeWidth="3"
-                                        strokeLinecap="round"
-                                        strokeDasharray={circ}
-                                        strokeDashoffset={offset}
+                                        strokeWidth="3" strokeLinecap="round"
+                                        strokeDasharray={circ} strokeDashoffset={offset}
                                         transform="rotate(-90 15 15)"
-                                        style={{ transition: 'stroke-dashoffset 0.8s ease' }}
-                                      />
+                                        style={{ transition: 'stroke-dashoffset 0.8s ease' }} />
                                       <text x="15" y="15" textAnchor="middle" dominantBaseline="central"
                                         fill="var(--text-secondary)" fontSize="8" fontWeight="600">
                                         {(item.f1_score * 100).toFixed(0)}
@@ -1085,170 +1128,21 @@ const AdminDashboard = ({ initialTab }) => {
                           </p>
                         )}
                       </div>
-                      </div>
 
-                      {/* ── History Chart ── */}
-                      <div className="classification-history-section">
-                        <div className="classification-history-header">
-                          <h4>
-                            <TrendingUp size={16} />
-                            Historique 10 jours
-                          </h4>
-                          {historyLoading && <div className="loader-spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />}
-                        </div>
-
-                        {classificationHistory.length > 0 ? (
-                          <>
-                            {/* Mini KPI row */}
-                            <div className="classification-history-kpis">
-                              <div className="classification-history-kpi">
-                                <span className="classification-history-kpi__label">Dernière accuracy</span>
-                                <span className="classification-history-kpi__value" style={{ color: '#22c55e' }}>
-                                  {((classificationHistory[0]?.accuracy || 0) * 100).toFixed(2)}%
-                                </span>
-                              </div>
-                              <div className="classification-history-kpi">
-                                <span className="classification-history-kpi__label">Évolution</span>
-                                <span className="classification-history-kpi__value">
-                                  {classificationHistory.length > 1 ? (() => {
-                                    const delta = (classificationHistory[0]?.accuracy || 0) - (classificationHistory[classificationHistory.length - 1]?.accuracy || 0);
-                                    const sign = delta >= 0 ? '+' : '';
-                                    return <span style={{ color: delta >= 0 ? '#22c55e' : '#ef4444' }}>{sign}{(delta * 100).toFixed(2)}%</span>;
-                                  })() : '—'}
-                                </span>
-                              </div>
-                              <div className="classification-history-kpi">
-                                <span className="classification-history-kpi__label">Points</span>
-                                <span className="classification-history-kpi__value">{classificationHistory.length}</span>
-                              </div>
-                            </div>
-
-                            {/* SVG Line Chart */}
-                            {classificationHistory.length > 1 ? (
-                              <div className="classification-chart-container">
-                                <svg
-                                  viewBox={`0 0 ${Math.max(300, classificationHistory.length * 60)} 200`}
-                                  preserveAspectRatio="xMidYMid meet"
-                                  className="classification-chart-svg"
-                                >
-                                  {/* Grid lines */}
-                                  {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
-                                    const y = 180 - frac * 150;
-                                    return (
-                                      <g key={frac}>
-                                        <line x1="0" y1={y} x2="100%" y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-                                        <text x="5" y={y + 4} fill="var(--muted)" fontSize="9">{(frac * 100).toFixed(0)}%</text>
-                                      </g>
-                                    );
-                                  })}
-
-                                  {/* Accuracy line */}
-                                                  <polyline
-                                    fill="none"
-                                    stroke="#3b82f6"
-                                    strokeWidth="2"
-                                    strokeLinejoin="round"
-                                    strokeLinecap="round"
-                                    points={classificationHistory.map((entry, i) => {
-                                      const x = 50 + (i / Math.max(1, classificationHistory.length - 1)) * (Math.max(300, classificationHistory.length * 60) - 70);
-                                      const y = 180 - (entry.accuracy || 0) * 150;
-                                      return `${x},${y}`;
-                                    }).join(' ')}
-                                  />
-
-                                  {/* Macro F1 line */}
-                                  <polyline
-                                    fill="none"
-                                    stroke="#8b5cf6"
-                                    strokeWidth="2"
-                                    strokeLinejoin="round"
-                                    strokeLinecap="round"
-                                    strokeDasharray="4 3"
-                                    points={classificationHistory.map((entry, i) => {
-                                      const x = 50 + (i / Math.max(1, classificationHistory.length - 1)) * (Math.max(300, classificationHistory.length * 60) - 70);
-                                      const y = 180 - (entry.macro_f1 || 0) * 150;
-                                      return `${x},${y}`;
-                                    }).join(' ')}
-                                  />
-
-                                  {/* Dots + date labels */}
-                                  {classificationHistory.map((entry, i) => {
-                                    const x = 50 + (i / Math.max(1, classificationHistory.length - 1)) * (Math.max(300, classificationHistory.length * 60) - 70);
-                                    const ay = 180 - (entry.accuracy || 0) * 150;
-                                    const fy = 180 - (entry.macro_f1 || 0) * 150;
-                                    const date = new Date(entry.timestamp);
-                                    const label = date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-                                    return (
-                                      <g key={i}>
-                                        <circle cx={x} cy={ay} r="3.5" fill="#3b82f6" stroke="#1e293b" strokeWidth="1.5" />
-                                        <circle cx={x} cy={fy} r="3.5" fill="#8b5cf6" stroke="#1e293b" strokeWidth="1.5" />
-                                        {i % 2 === 0 && (
-                                          <text x={x} y="198" fill="var(--muted)" fontSize="8" textAnchor="middle">
-                                            {label}
-                                          </text>
-                                        )}
-                                      </g>
-                                    );
-                                  })}
-
-                                  {/* Legend */}
-                                  <g transform={`translate(${Math.max(300, classificationHistory.length * 60) - 140}, 10)`}>
-                                    <line x1="0" y1="5" x2="20" y2="5" stroke="#3b82f6" strokeWidth="2" />
-                                    <text x="25" y="9" fill="var(--text-secondary)" fontSize="9">Accuracy</text>
-                                    <line x1="0" y1="20" x2="20" y2="20" stroke="#8b5cf6" strokeWidth="2" strokeDasharray="4 3" />
-                                    <text x="25" y="24" fill="var(--text-secondary)" fontSize="9">Macro F1</text>
-                                  </g>
-                                </svg>
-                              </div>
-                            ) : (
-                              <div className="classification-history-single">
-                                <Clock size={32} />
-                                <p>Un seul point de donnée pour l'instant.</p>
-                                <span>L'historique s'enrichit à chaque réentraînement du modèle.</span>
-                              </div>
-                            )}
-
-                            {/* History table */}
-                            <div className="classification-history-table-wrap">
-                              <table className="classification-history-table">
-                                <thead>
-                                  <tr>
-                                    <th>Date</th>
-                                    <th>Accuracy</th>
-                                    <th>Macro F1</th>
-                                    <th>Weighted F1</th>
-                                    <th>Classes</th>
-                                    <th>Échantillons</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {classificationHistory.slice(0, 10).map((entry, i) => {
-                                    const date = new Date(entry.timestamp);
-                                    const dateStr = date.toLocaleDateString('fr-FR', {
-                                      day: '2-digit', month: 'short', year: 'numeric',
-                                      hour: '2-digit', minute: '2-digit',
-                                    });
-                                    return (
-                                      <tr key={i}>
-                                        <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{dateStr}</td>
-                                        <td>{(entry.accuracy * 100).toFixed(2)}%</td>
-                                        <td>{(entry.macro_f1 * 100).toFixed(2)}%</td>
-                                        <td>{(entry.weighted_f1 * 100).toFixed(2)}%</td>
-                                        <td>{entry.class_count || '—'}</td>
-                                        <td>{entry.sample_count || '—'}</td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="classification-history-empty">
-                            <Clock size={28} />
-                            <p>Aucun historique disponible. L'historique se remplit à chaque entraînement.</p>
-                          </div>
-                        )}
+                      {/* ── Model Info Footer ── */}
+                      <div className="classification-model-info">
+                        <span className="classification-model-info__item">
+                          <Database size={13} /> Échantillons : <strong>{classificationMetrics.sample_count}</strong>
+                        </span>
+                        <span className="classification-model-info__item">
+                          <BarChart2 size={13} /> Caractéristiques : <strong>{classificationMetrics.feature_count}</strong>
+                        </span>
+                        <span className="classification-model-info__item">
+                          <Activity size={13} /> Test : <strong>{classificationMetrics.test_sample_count}</strong>
+                        </span>
+                        <span className="classification-model-info__item">
+                          <TrendingUp size={13} /> Dernière accuracy : <strong>{((classificationMetrics.accuracy || 0) * 100).toFixed(2)}%</strong>
+                        </span>
                       </div>
                     </>
                   )}

@@ -1145,109 +1145,136 @@
   font-weight: 600;
 }
 
-.classification-split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
+.classification-auto-refresh {
+  font-size: 0.7rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: pulse 2s infinite;
+}
+
+/* ── 10-day Histogram ── */
+.classification-10day {
+  background: rgba(0,0,0,0.12);
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  padding: 20px;
   margin-bottom: 28px;
 }
 
-@media (max-width: 900px) {
-  .classification-split {
-    grid-template-columns: 1fr;
-  }
+.classification-10day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
-.classification-histogram-wrapper {
-  padding: 20px;
-  background: rgba(0,0,0,0.15);
-  border-radius: 18px;
-  border: 1px solid var(--border);
-}
-
-.classification-histogram-title {
+.classification-10day-header h4 {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  margin-bottom: 20px;
   color: var(--text-secondary);
 }
 
-.classification-histogram {
+.classification-10day-legend {
   display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  gap: 24px;
-  height: 200px;
+  gap: 14px;
+  font-size: 0.72rem;
+  color: var(--muted);
 }
 
-.classification-histogram__col {
+.classification-10day-legend span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cls-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.cls-histogram-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.cls-histogram {
+  display: flex;
+  gap: 4px;
+  min-width: 500px;
+  height: 220px;
+}
+
+.cls-histogram-y {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: space-between;
+  padding-right: 8px;
+  border-right: 1px solid var(--border);
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.cls-histogram-y-label {
+  font-size: 0.6rem;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.cls-histogram-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex: 1;
+}
+
+.cls-histogram-bar-group {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
   flex: 1;
-  max-width: 80px;
 }
 
-.classification-histogram__val {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-
-.classification-histogram__track {
-  width: 40px;
-  height: 160px;
-  border-radius: 8px;
-  background: rgba(255,255,255,0.04);
+.cls-histogram-bars-inner {
   display: flex;
   align-items: flex-end;
-  position: relative;
-}
-
-.classification-histogram__bar {
+  gap: 3px;
+  height: 200px;
   width: 100%;
-  border-radius: 8px;
-  transition: height 0.8s ease;
-  min-height: 4px;
 }
 
-.classification-histogram__lbl {
-  font-size: 0.65rem;
+.cls-histogram-bar {
+  flex: 1;
+  min-width: 10px;
+  max-width: 22px;
+  border-radius: 4px 4px 0 0;
+  transition: height 0.6s ease;
+  cursor: help;
+}
+
+.cls-histogram-x-label {
+  font-size: 0.6rem;
   color: var(--muted);
-  text-align: center;
-  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.cls-histogram-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
-}
-
-.classification-histogram-footer {
-  display: flex;
-  justify-content: center;
-  gap: 16px;
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  font-size: 0.7rem;
+  gap: 10px;
+  padding: 30px;
   color: var(--muted);
 }
-
-.classification-histogram-footer strong {
-  color: var(--text-secondary);
-}
-
-.classification-histogram-footer span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-
 
 .classification-classes-section {
   margin-top: 8px;
@@ -1391,144 +1418,7 @@
 }
 
 /* ── Classification History ── */
-.classification-history-section {
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
-}
 
-.classification-history-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 18px;
-}
-
-.classification-history-header h4 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.classification-history-kpis {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.classification-history-kpi {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px 18px;
-  flex: 1;
-  text-align: center;
-}
-
-.classification-history-kpi__label {
-  display: block;
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--muted);
-  margin-bottom: 4px;
-}
-
-.classification-history-kpi__value {
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.classification-chart-container {
-  background: rgba(0,0,0,0.2);
-  border-radius: 14px;
-  padding: 16px;
-  margin-bottom: 20px;
-  overflow-x: auto;
-}
-
-.classification-chart-svg {
-  width: 100%;
-  min-width: 300px;
-  height: 200px;
-}
-
-.classification-history-single {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 30px;
-  color: var(--muted);
-  text-align: center;
-}
-
-.classification-history-single p {
-  font-size: 0.9rem;
-}
-
-.classification-history-single span {
-  font-size: 0.75rem;
-  opacity: 0.7;
-}
-
-.classification-history-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 24px;
-  color: var(--muted);
-  text-align: center;
-  font-size: 0.85rem;
-}
-
-.classification-history-table-wrap {
-  overflow-x: auto;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-}
-
-.classification-history-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.8rem;
-}
-
-.classification-history-table th {
-  text-align: left;
-  padding: 10px 14px;
-  font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  font-size: 0.65rem;
-  background: rgba(0,0,0,0.25);
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-
-.classification-history-table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
-.classification-history-table tbody tr {
-  transition: background 0.2s ease;
-}
-
-.classification-history-table tbody tr:hover {
-  background: rgba(255,255,255,0.03);
-}
-
-.classification-history-table tbody tr:last-child td {
-  border-bottom: none;
-}
 
 /* ========== NOTIFICATIONS SECTION ========== */
 .notif-section {
