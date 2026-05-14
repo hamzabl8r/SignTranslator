@@ -649,6 +649,30 @@ const VideoCall = ({
       return;
     }
 
+    // Check that the users share a conversation (proxy for "friends")
+    try {
+      const token = localStorage.getItem('token');
+      const auth = token?.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      const convRes = await axios.get('https://backpfe-production-789f.up.railway.app/conversations', {
+        headers: { Authorization: auth },
+        params: { _t: Date.now() },
+      });
+      const conversations = convRes.data?.conversations || convRes.data || [];
+      const hasConversation = conversations.some(
+        (c) =>
+          Array.isArray(c.members) &&
+          c.members.some((m) => String(m._id || m) === String(currentUser._id)) &&
+          c.members.some((m) => String(m._id || m) === String(selectedUser._id))
+      );
+      if (!hasConversation) {
+        toast.error('Vous ne pouvez appeler que des utilisateurs avec qui vous avez déjà discuté');
+        return;
+      }
+    } catch {
+      toast.error('Impossible de vérifier la conversation');
+      return;
+    }
+
     hasAcceptedCallRef.current = false;
     hasReceivedAnswerRef.current = false;
     hasLoggedEndedRef.current = false;

@@ -22,7 +22,9 @@ const Profil = () => {
         lastName: user?.lastName || '',
         email: user?.email || '',
         phoneNumber: user?.phoneNumber || '',
-        dateOfBirth: user?.dateOfBirth ? user.dateOfBirth.split('T')[0] : ''
+        dateOfBirth: user?.dateOfBirth ? user.dateOfBirth.split('T')[0] : '',
+        password: '',
+        confirmPassword: '',
     });
 
     useEffect(() => {
@@ -32,7 +34,9 @@ const Profil = () => {
                 lastName: user.lastName || '',
                 email: user.email || '',
                 phoneNumber: user.phoneNumber || '',
-                dateOfBirth: user.dateOfBirth ? user.dateOfBirth.split('T')[0] : ''
+                dateOfBirth: user.dateOfBirth ? user.dateOfBirth.split('T')[0] : '',
+                password: '',
+                confirmPassword: '',
             });
         }
     }, [user]);
@@ -68,7 +72,9 @@ const Profil = () => {
             lastName: user?.lastName || '',
             email: user?.email || '',
             phoneNumber: user?.phoneNumber || '',
-            dateOfBirth: user?.dateOfBirth ? user.dateOfBirth.split('T')[0] : ''
+            dateOfBirth: user?.dateOfBirth ? user.dateOfBirth.split('T')[0] : '',
+            password: '',
+            confirmPassword: '',
         });
     };
 
@@ -78,9 +84,19 @@ const Profil = () => {
     };
 
     const handleSave = async () => {
+        if (editData.password && editData.password !== editData.confirmPassword) {
+            showToast("Passwords do not match", "error");
+            return;
+        }
         setUpdating(true);
         try {
-            await dispatch(editUser({ id: user._id, editprofil: editData })).unwrap();
+            const payload = { ...editData };
+            if (!payload.password) {
+                delete payload.password;
+                delete payload.confirmPassword;
+            }
+            delete payload.confirmPassword;
+            await dispatch(editUser({ id: user._id, editprofil: payload })).unwrap();
             await dispatch(userCurrent());
             setEditMode(false);
             showToast("Profile updated successfully!", "success");
@@ -136,7 +152,7 @@ const Profil = () => {
                                 </button>
                             )}
                         </div>
-                        <p className="member-tag">Member since 2024</p>
+                        <p className="member-tag">Member since : {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}</p>
 
                         {/* Photo update section */}
                         <div className="photo-section">
@@ -264,6 +280,30 @@ const Profil = () => {
                                         name="dateOfBirth"
                                         value={editData.dateOfBirth}
                                         onChange={handleEditChange}
+                                        disabled={updating}
+                                    />
+                                </div>
+                                <hr className="divider" />
+                                <p className="section-label" style={{ marginTop: 0 }}>Change password (optional)</p>
+                                <div className="edit-row">
+                                    <label>New password</label>
+                                    <input
+                                        type="password"
+                                        name="password"
+                                        value={editData.password}
+                                        onChange={handleEditChange}
+                                        placeholder="Leave blank to keep current"
+                                        disabled={updating}
+                                    />
+                                </div>
+                                <div className="edit-row">
+                                    <label>Confirm password</label>
+                                    <input
+                                        type="password"
+                                        name="confirmPassword"
+                                        value={editData.confirmPassword}
+                                        onChange={handleEditChange}
+                                        placeholder="Repeat new password"
                                         disabled={updating}
                                     />
                                 </div>
