@@ -15,7 +15,6 @@ import ResetPassword from './component/ResetPassword';
 import ProtectedRoute from './component/ProtectedRoute';
 import Chat from './component/Chat';
 import AdminDashboard from './component/AdminDashboard';
-import HelloWorld from './component/HelloWorld';
 import process from 'process';
 import { Buffer } from 'buffer';
 
@@ -64,7 +63,6 @@ const App = () => {
         <Route path="/register" element={<><Auth /></>} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
-        <Route path="/hello" element={<HelloWorld />} />
 
         <Route element={<ProtectedRoute />}>
           <Route path="/translator" element={<><Header /><Translator /></>} />

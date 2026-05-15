@@ -107,6 +107,23 @@ const Auth = () => {
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
+
+    // Age verification: User must be at least 16 years old
+    if (dateOfBirth) {
+      const dob = new Date(dateOfBirth);
+      const today = new Date();
+      let age = today.getFullYear() - dob.getFullYear();
+      const m = today.getMonth() - dob.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+        age--;
+      }
+
+      if (age < 16) {
+        alert("You must be at least 16 years old to create an account.");
+        return;
+      }
+    }
+
     const finalRegisterData = { ...registerData, dateOfBirth };
     console.log("Submitting:", finalRegisterData);
 
