@@ -1043,23 +1043,32 @@ const AdminDashboard = ({ initialTab }) => {
                               </div>
                               {/* Bars */}
                               <div className="cls-histogram-bars">
-                                {classificationHistory.slice(0, 10).map((entry, i) => {
-                                  const date = new Date(entry.timestamp);
-                                  const day = date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-                                  const acc = (entry.accuracy || 0) * 100;
-                                  const macro = (entry.macro_f1 || 0) * 100;
-                                  const weighted = (entry.weighted_f1 || 0) * 100;
-                                  return (
-                                    <div className="cls-histogram-bar-group" key={i}>
-                                      <div className="cls-histogram-bars-inner">
-                                        <div className="cls-histogram-bar" style={{ height: `${acc}%`, background: '#3b82f6' }} title={`Accuracy: ${acc.toFixed(1)}%`} />
-                                        <div className="cls-histogram-bar" style={{ height: `${macro}%`, background: '#8b5cf6' }} title={`Macro F1: ${macro.toFixed(1)}%`} />
-                                        <div className="cls-histogram-bar" style={{ height: `${weighted}%`, background: '#14b8a6' }} title={`Weighted F1: ${weighted.toFixed(1)}%`} />
+                                {(() => {
+                                  const today = new Date();
+                                  const last10 = Array.from({ length: 10 }, (_, i) => {
+                                    const d = new Date(today);
+                                    d.setDate(d.getDate() - (9 - i));
+                                    return d;
+                                  });
+
+                                  return last10.map((date, i) => {
+                                    const entry = classificationHistory[i];
+                                    const acc = entry ? (entry.accuracy || 0) * 100 : 0;
+                                    const macro = entry ? (entry.macro_f1 || 0) * 100 : 0;
+                                    const weighted = entry ? (entry.weighted_f1 || 0) * 100 : 0;
+                                    const day = date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+                                    return (
+                                      <div className="cls-histogram-bar-group" key={i}>
+                                        <div className="cls-histogram-bars-inner">
+                                          <div className="cls-histogram-bar" style={{ height: `${acc}%`, background: '#3b82f6' }} title={`Accuracy: ${acc.toFixed(1)}%`} />
+                                          <div className="cls-histogram-bar" style={{ height: `${macro}%`, background: '#8b5cf6' }} title={`Macro F1: ${macro.toFixed(1)}%`} />
+                                          <div className="cls-histogram-bar" style={{ height: `${weighted}%`, background: '#14b8a6' }} title={`Weighted F1: ${weighted.toFixed(1)}%`} />
+                                        </div>
+                                        <span className="cls-histogram-x-label">{day}</span>
                                       </div>
-                                      <span className="cls-histogram-x-label">{day}</span>
-                                    </div>
-                                  );
-                                })}
+                                    );
+                                  });
+                                })()}
                               </div>
                             </div>
                           </div>
