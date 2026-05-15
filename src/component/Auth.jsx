@@ -156,9 +156,9 @@ const Auth = () => {
         // --- Login Form ---
         <div className="login">
           <div className="login-container">
-            <div className="logo">
+            <Link to="/" className="logo">
               <img src={logo} alt="Logo" className="logo-png" />
-            </div>
+            </Link>
             <div className="btn-head">
               <button className="btn-login active">Login</button>
               <button
@@ -205,9 +205,9 @@ const Auth = () => {
         // --- Register Form ---
         <div className="register">
           <div className="register-container">
-          <div className="logo">
+          <Link to="/" className="logo">
               <img src={logo} alt="Logo" className="logo-png" />
-            </div>
+            </Link>
             <div className="btn-head">
               <button
                 className="btn-login"
