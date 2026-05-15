@@ -115,6 +115,17 @@ const Profil = () => {
         ? `https://backpfe-production-789f.up.railway.app${user.profilePic}`
         : "https://img.freepik.com/free-vector/user-blue-gradient_78370-4692.jpg?w=150";
 
+    const formatMemberSince = (value) => {
+        if (!value) return 'N/A';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return 'N/A';
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+        });
+    };
+
     return (
         <>
             <SeoHelmet title="Profile - MediSign" />
@@ -152,7 +163,7 @@ const Profil = () => {
                                 </button>
                             )}
                         </div>
-                        <p className="member-tag">Member since : {user.createdSince ? new Date(user.createdSince).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}</p>
+                        <p className="member-tag">Member since : {formatMemberSince(user?.createdAt)}</p>
 
                         {/* Photo update section */}
                         <div className="photo-section">
