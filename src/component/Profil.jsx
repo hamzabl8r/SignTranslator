@@ -152,7 +152,7 @@ const Profil = () => {
                                 </button>
                             )}
                         </div>
-                        <p className="member-tag">Member since : {user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}</p>
+                        <p className="member-tag">Member since : {user.createdSince ? new Date(user.createdSince).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}</p>
 
                         {/* Photo update section */}
                         <div className="photo-section">
