@@ -690,6 +690,7 @@ const AdminDashboard = ({ initialTab }) => {
                     {[
                       { icon: <Users size={18}/>, label: 'Gérer les utilisateurs', tab: 'users' },
                       { icon: <Database size={18}/>, label: 'Valider les datasets', tab: 'datasets', badge: datasetCounts.pending },
+                      { icon: <BarChart2 size={18}/>, label: 'Voir la classification', tab: 'classification' },
                       { icon: <Bell size={18}/>, label: 'Envoyer une notification', tab: 'notifications' },
                       { icon: <Activity size={18}/>, label: 'Voir les activités', tab: 'activity' },
                     ].map(({ icon, label, tab, badge }) => (
