@@ -615,6 +615,40 @@ const VideoCall = ({
     cleanupCall({ emitEndCall: true, closeModal: true });
   }, [cleanupCall]);
 
+  const attachRemoteStream = useCallback(
+    (remoteStream) => {
+      if (!remoteStream || !remoteVideoRef.current) return;
+
+      const remoteVideo = remoteVideoRef.current;
+      remoteVideo.srcObject = remoteStream;
+
+      const playRemote = () => {
+        remoteVideo.play().catch((err) => {
+          console.warn('Remote video play blocked:', err?.message || err);
+        });
+      };
+
+      if (remoteVideo.readyState >= 1) {
+        playRemote();
+      } else {
+        remoteVideo.onloadedmetadata = playRemote;
+      }
+
+      if (callTimeoutRef.current) {
+        clearTimeout(callTimeoutRef.current);
+        callTimeoutRef.current = null;
+      }
+
+      setCallStatusSynced('connected');
+
+      if (!hasLoggedConnectedRef.current) {
+        hasLoggedConnectedRef.current = true;
+        persistCallEventMessage('📞 Video call connected');
+      }
+    },
+    [persistCallEventMessage, setCallStatusSynced]
+  );
+
   // ─── Media setup ─────────────────────────────────────────────────────────────
   const setupMedia = async () => {
     try {
@@ -681,24 +715,10 @@ const VideoCall = ({
         });
       });
 
-      peer.on('stream', (remoteStream) => {
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = remoteStream;
-          remoteVideoRef.current.play().catch(() => {});
-        }
+      peer.on('stream', attachRemoteStream);
 
-        if (callTimeoutRef.current) {
-          clearTimeout(callTimeoutRef.current);
-          callTimeoutRef.current = null;
-        }
-
-        setCallStatusSynced('connected');
-
-        if (!hasLoggedConnectedRef.current) {
-          hasLoggedConnectedRef.current = true;
-          persistCallEventMessage('📞 Video call connected');
-        }
-
+      peer.on('track', (_track, remoteStream) => {
+        attachRemoteStream(remoteStream);
       });
 
       peer.on('error', (err) => {
@@ -762,20 +782,13 @@ const VideoCall = ({
       });
 
       peer.on('stream', (remoteStream) => {
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = remoteStream;
-          remoteVideoRef.current.play().catch(() => {});
-        }
-
+        attachRemoteStream(remoteStream);
         setIncomingCall(null);
         incomingCallRef.current = null;
-        setCallStatusSynced('connected');
+      });
 
-        if (!hasLoggedConnectedRef.current) {
-          hasLoggedConnectedRef.current = true;
-          persistCallEventMessage('📞 Video call connected');
-        }
-
+      peer.on('track', (_track, remoteStream) => {
+        attachRemoteStream(remoteStream);
       });
 
       peer.on('error', (err) => {

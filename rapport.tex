@@ -1,0 +1,159 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{siunitx}
+\usepackage{hyperref}
+\usepackage{enumitem}
+
+\setstretch{1.15}
+\sisetup{group-separator={,},group-minimum-digits=4}
+
+\title{Performance and Stress Testing Evaluation Report}
+\author{Hamza Béji}
+\date{May 16, 2026}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction and Objectives}
+
+As part of the validation phase of our full-stack web application built on the MERN stack
+(MongoDB, Express.js, React, Node.js), comprehensive performance and stress testing was conducted.
+The main objective was to evaluate the stability, scalability, and response latency of the
+Express.js backend and MongoDB layer under high concurrent traffic.
+
+Testing was performed using Grafana k6 (v2.0.0-rc1), enabling observation of server behavior,
+resource utilization, and request queue dynamics under increasing load.
+
+\section{Testing Methodology and Environment}
+
+Performance tests were executed locally using simulated concurrent workloads.
+
+The primary evaluation metrics are:
+
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Throughput} $(T)$: number of successful HTTP requests processed per second
+    \begin{equation}
+        T = \frac{N_{\text{requests}}}{\Delta t}
+    \end{equation}
+    where $\Delta t$ is the total test duration (\SI{55}{s}).
+
+    \item \textbf{Error Rate} $(E)$: percentage of failed HTTP responses
+    \begin{equation}
+        E = \frac{N_{\text{failed}}}{N_{\text{total}}} \times 100\%
+    \end{equation}
+
+    \item \textbf{Percentiles} $p(x)$: response-time threshold below which $x\%$ of observations fall.
+    Specifically, $p(90)$ and $p(95)$ were monitored to assess tail latency.
+\end{itemize}
+
+The load profile followed three stages:
+
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Stage 1 (Ramp-up):} 0 $\rightarrow$ 100 Virtual Users (VUs) in \SI{15}{s}
+    \item \textbf{Stage 2 (Stress):} 100 constant VUs for \SI{30}{s}
+    \item \textbf{Stage 3 (Ramp-down):} 100 $\rightarrow$ 0 VUs in \SI{10}{s}
+\end{itemize}
+
+\section{Test Scenarios and Analytical Results}
+
+\subsection{Scenario A: Read-Intensive Database Load (GET Request)}
+
+This scenario evaluated system performance during standard data retrieval operations.
+
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Target endpoint:} \texttt{GET /api/doctor}
+    \item \textbf{Generated volume:} 8,550 checks across 4,275 HTTP requests
+\end{itemize}
+
+\begin{table}[h!]
+\centering
+\caption{GET Request Performance Metrics}
+\begin{tabular}{p{0.42\linewidth} p{0.20\linewidth} p{0.30\linewidth}}
+\toprule
+\textbf{Metric} & \textbf{Value} & \textbf{Status / Interpretation} \\
+\midrule
+Checks succeeded ratio & 100.00\% (8550/8550) & Passed \\
+HTTP request failure rate $(E)$ & 0.00\% & Completely stable \\
+Throughput $(T)$ & 76.84 req/s & Efficient resource handling \\
+Average latency $(\mu)$ & 5.11 ms & Very fast response \\
+Median latency & 4.76 ms & Consistent response time \\
+Maximum latency & 40.66 ms & Within safe limits \\
+95th percentile $p(95)$ & 8.77 ms & Excellent tail latency \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Analysis.}
+The read-intensive workload performed exceptionally well. An average latency of
+$\mu = \SI{5.11}{ms}$ under a peak of 100 VUs indicates efficient routing, indexing, and likely
+effective caching behavior. No observable degradation occurred during the stress window.
+
+\subsection{Scenario B: Compute-Intensive Authentication Load (POST Request)}
+
+This scenario simulated concurrent login requests requiring database access and
+cryptographic password verification.
+
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Target endpoint:} \texttt{POST /api/user/login}
+    \item \textbf{Generated volume:} 2,772 HTTP requests
+\end{itemize}
+
+\begin{table}[h!]
+\centering
+\caption{POST Request Performance Metrics}
+\begin{tabular}{p{0.42\linewidth} p{0.20\linewidth} p{0.30\linewidth}}
+\toprule
+\textbf{Metric} & \textbf{Value} & \textbf{Status / Interpretation} \\
+\midrule
+HTTP request failure rate $(E)$ & 0.00\% (2772/2772) & Functional success \\
+Throughput $(T)$ & 7.56 req/s & Significantly reduced throughput \\
+Average latency $(\mu)$ & 6.77 s & Critical bottleneck \\
+Maximum latency & 15.70 s & Severe peak delays \\
+Time threshold check ($<400$ ms) & 5.25\% passed & 94.75\% failed \\
+95th percentile $p(95)$ & 9.98 s & Severe queueing effects \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Analysis and Bottleneck Identification.}
+Although functional reliability remained intact ($E = 0.00\%$), a major architectural bottleneck
+was identified. Average latency increased to $\mu = \SI{6.77}{s}$, with worst-case delays of \SI{15.70}{s}.
+
+This degradation is primarily caused by CPU-bound password verification (\texttt{bcrypt.compare}).
+Because Node.js relies on a single main event loop for JavaScript execution, concurrent
+cryptographic operations can saturate processing capacity and increase event-loop wait time,
+resulting in cascading request latency.
+
+\section{Conclusion and Architectural Recommendations}
+
+The system maintained full functional integrity (0\% error rate) under both stress scenarios.
+However, to support realistic production-scale traffic, the following improvements are recommended:
+
+\begin{enumerate}[leftmargin=1.5em]
+    \item \textbf{Horizontal scaling with clustering.}
+    Use PM2 cluster mode (or native Node.js clustering) to spawn multiple worker processes
+    mapped to available CPU cores, mitigating single-process throughput limits.
+
+    \item \textbf{Cryptographic workload offloading.}
+    Offload bcrypt operations to Worker Threads or a dedicated authentication service to prevent
+    main-thread saturation and reduce queueing delay.
+
+    \item \textbf{Rate limiting and request queue control.}
+    Apply throttling and backpressure at the API gateway to protect authentication endpoints
+    from burst traffic and preserve global responsiveness.
+
+    \item \textbf{Optional algorithm/cost-factor tuning.}
+    Reevaluate bcrypt cost factor to balance security and latency objectives, and benchmark
+    alternatives only if security policy permits.
+\end{enumerate}
+
+\end{document}
